@@ -29,15 +29,36 @@ export interface BusinessContext {
     amount: number;
     status: string;
   }[];
+  // ---- NEW: expense tracking ----
+  totalExpenses: number;
+  todayExpenses: number;
 }
 
 export const buildFinancialContext = (context: BusinessContext): string => {
+  const netProfit = context.totalRevenue - context.totalExpenses;
+  const todayProfit = context.todayRevenue - context.todayExpenses;
+  const profitLabel = netProfit >= 0 ? 'Profit' : 'Loss';
+
   const lines = [
     `Business: ${context.businessName || 'SME'}`,
+    ``,
+    `=== MONEY IN ===`,
     `Total Revenue (all time): M ${context.totalRevenue.toFixed(2)}`,
-    `Total Outstanding (Sekoloto): M ${context.totalPending.toFixed(2)}`,
     `Today's Revenue: M ${context.todayRevenue.toFixed(2)}`,
+    ``,
+    `=== MONEY OUT ===`,
+    `Total Expenses (all time): M ${context.totalExpenses.toFixed(2)}`,
+    `Today's Expenses: M ${context.todayExpenses.toFixed(2)}`,
+    ``,
+    `=== PROFIT ===`,
+    `Net ${profitLabel} (all time): M ${netProfit.toFixed(2)}`,
+    `Today's ${profitLabel}: M ${todayProfit.toFixed(2)}`,
+    ``,
+    `=== OWED TO YOU ===`,
+    `Total Outstanding (Sekoloto): M ${context.totalPending.toFixed(2)}`,
     `Today's Owed: M ${context.todayOwed.toFixed(2)}`,
+    ``,
+    `=== INVENTORY ===`,
     `Total Products: ${context.totalProducts}`,
     `Low Stock Items: ${context.lowStockCount}`,
     `Out of Stock Items: ${context.outOfStockCount}`,
@@ -45,6 +66,7 @@ export const buildFinancialContext = (context: BusinessContext): string => {
   ];
 
   if (context.topProducts.length > 0) {
+    lines.push('');
     lines.push('Top Selling Products:');
     context.topProducts.forEach((p, i) => {
       lines.push(`  ${i + 1}. ${p.name} — ${p.sales} sales — M ${p.revenue.toFixed(2)}`);
@@ -52,6 +74,7 @@ export const buildFinancialContext = (context: BusinessContext): string => {
   }
 
   if (context.recentTransactions.length > 0) {
+    lines.push('');
     lines.push('Recent Transactions:');
     context.recentTransactions.forEach((t) => {
       const itemsText = t.items && t.items.length > 0 ? t.items : '-';
@@ -82,7 +105,10 @@ export const askGemini = async (
 Lintlha tsa khoebo:
 ${financialContext}
 
-Bua ka mokhoa o bonolo le o khutšoanyane. U se ke ua fana ka likeletso tsa lichelete tse tebileng — u fana ka tlhahisoleseding feela.`
+Bua ka mokhoa o bonolo le o khutšoanyane.
+- Ha u botsa ka pholokelo (profit), sebelisa Net Profit = Revenue − Expenses.
+- Ha u botsa ka litšenyehelo (expenses), sebelisa Total Expenses kapa Today's Expenses.
+- U se ke ua fana ka likeletso tsa lichelete tse tebileng — u fana ka tlhahisoleseding feela.`
       : `You are a financial assistant for an SME in Lesotho.
 
 **IMPORTANT: Answer in ENGLISH ONLY. Do not use Sesotho.**
@@ -90,7 +116,10 @@ Bua ka mokhoa o bonolo le o khutšoanyane. U se ke ua fana ka likeletso tsa lich
 Business data:
 ${financialContext}
 
-Speak in simple, short terms. Do not give formal financial advice — only provide insights based on data.`;
+Speak in simple, short terms.
+- When asked about profit, use Net Profit = Revenue − Expenses.
+- When asked about spending, use Total Expenses or Today's Expenses.
+- Do not give formal financial advice — only provide insights based on data.`;
 
   try {
     const completion = await groq.chat.completions.create({

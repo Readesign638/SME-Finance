@@ -5,7 +5,7 @@ import {
   ShieldCheck, MessageCircle, Mail,
   User, Settings, Wallet, TrendingUp, History, BarChart3, Bell, Save,
   Package, Wifi, WifiOff, Bot, AlertTriangle, Boxes, CreditCard, MessageSquare,
-  ArrowUp, HandCoins, Banknote, Sparkles, Phone
+  ArrowUp, HandCoins, Banknote, Sparkles, Phone, Receipt
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -40,7 +40,6 @@ import {
 } from '../services/firebase';
 import { useLanguage } from '../hooks/useLanguage';
 
-// Logos served from public/ so they cache offline via the service worker
 const MpesaLogo = '/Mpesa.jpeg';
 const EcocashLogo = '/Ecocash.jpeg';
 
@@ -48,7 +47,7 @@ type View =
   | 'dashboard' | 'transactions' | 'inventory' | 'analytics'
   | 'ai' | 'wallet' | 'profile' | 'settings';
 
-type LedgerTab = 'sales' | 'debts';
+type LedgerTab = 'sales' | 'debts' | 'expenses';
 
 const SEO = ({ view }: { view: string }) => {
   const title = `${view.charAt(0).toUpperCase() + view.slice(1)} | SME Finance`;
@@ -80,6 +79,8 @@ const modeLabel = (m: BusinessMode) =>
 const usesInventory = (m: BusinessMode) => m === 'products';
 const allowsSales   = (m: BusinessMode) => m === 'products' || m === 'services';
 
+const EXPENSE_CATEGORIES = ['Rent', 'Utilities', 'Salaries', 'Transport', 'Stock', 'Other'] as const;
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const [checkingAuth, setCheckingAuth] = useState(true);
@@ -97,13 +98,14 @@ export default function Dashboard() {
 
   const [saleModalOpen, setSaleModalOpen] = useState(false);
   const [debtModalOpen, setDebtModalOpen] = useState(false);
+  const [expenseModalOpen, setExpenseModalOpen] = useState(false);
   const [paymentModalId, setPaymentModalId] = useState<string | null>(null);
   const [paymentAmount, setPaymentAmount] = useState('');
   const [inventoryPromptOpen, setInventoryPromptOpen] = useState(false);
 
-  // ===== AI DRAWER STATE =====
   const [aiDrawerOpen, setAiDrawerOpen] = useState(false);
 
+  // Sale form
   const [saleName, setSaleName] = useState('');
   const [saleItems, setSaleItems] = useState<SaleItem[]>([]);
   const [saleProductId, setSaleProductId] = useState('');
@@ -112,6 +114,7 @@ export default function Dashboard() {
   const [saleDesc, setSaleDesc] = useState('');
   const [saleAmount, setSaleAmount] = useState('');
 
+  // Debt form
   const [debtName, setDebtName] = useState('');
   const [debtPhone, setDebtPhone] = useState('');
   const [debtEmail, setDebtEmail] = useState('');
@@ -122,6 +125,11 @@ export default function Dashboard() {
   const [debtNotes, setDebtNotes] = useState('');
   const [debtDesc, setDebtDesc] = useState('');
   const [debtAmount, setDebtAmount] = useState('');
+
+  // Expense form
+  const [expenseDesc, setExpenseDesc] = useState('');
+  const [expenseAmount, setExpenseAmount] = useState('');
+  const [expenseCategory, setExpenseCategory] = useState<string>('Utilities');
 
   const [showOnboarding, setShowOnboarding] = useState<boolean>(
     () => !localStorage.getItem('khotsopay_onboarded')
@@ -228,18 +236,41 @@ export default function Dashboard() {
     };
   }, []);
 
+  // ---- Derived lists ----
+  const sales = useMemo(
+    () => (allTransactions || []).filter((t) => t.status === 'Completed' && t.type !== 'expense'),
+    [allTransactions]
+  );
+  const debts = useMemo(
+    () => (allTransactions || []).filter((t) => t.status === 'Pending'),
+    [allTransactions]
+  );
+  const expenses = useMemo(
+    () => (allTransactions || []).filter((t) => t.type === 'expense'),
+    [allTransactions]
+  );
+
   const dailyStats = useMemo(() => {
     const todayStr = new Date().toLocaleDateString('en-LS', {
       month: 'short', day: 'numeric', year: 'numeric'
     });
     const todays = (allTransactions || []).filter((tx) => tx.date === todayStr);
+    const todaysSales = todays.filter((t) => t.status === 'Completed' && t.type !== 'expense');
+    const todaysExpenses = todays.filter((t) => t.type === 'expense');
+
+    const revenue = todaysSales.reduce((s, t) => s + t.amount, 0);
+    const expenseTotal = todaysExpenses.reduce((s, t) => s + t.amount, 0);
+
     return {
-      revenue: todays.filter((t) => t.status === 'Completed').reduce((s, t) => s + t.amount, 0),
-      mpesa: todays.filter((t) => t.method === 'M-Pesa' && t.status === 'Completed').reduce((s, t) => s + t.amount, 0),
-      ecocash: todays.filter((t) => t.method === 'EcoCash' && t.status === 'Completed').reduce((s, t) => s + t.amount, 0),
-      cash: todays.filter((t) => t.method === 'Cash' && t.status === 'Completed').reduce((s, t) => s + t.amount, 0),
-      card: todays.filter((t) => t.method === 'Card' && t.status === 'Completed').reduce((s, t) => s + t.amount, 0),
+      revenue,
+      mpesa: todaysSales.filter((t) => t.method === 'M-Pesa').reduce((s, t) => s + t.amount, 0),
+      ecocash: todaysSales.filter((t) => t.method === 'EcoCash').reduce((s, t) => s + t.amount, 0),
+      cash: todaysSales.filter((t) => t.method === 'Cash').reduce((s, t) => s + t.amount, 0),
+      card: todaysSales.filter((t) => t.method === 'Card').reduce((s, t) => s + t.amount, 0),
       owed: todays.filter((t) => t.status === 'Pending').reduce((s, t) => s + (t.amount - (t.amountPaid ?? 0)), 0),
+      expenses: expenseTotal,
+      profit: revenue - expenseTotal,
+      expenseCount: todaysExpenses.length,
       date: todayStr
     };
   }, [allTransactions]);
@@ -255,17 +286,14 @@ export default function Dashboard() {
     [products]
   );
 
-  const sales = useMemo(
-    () => (allTransactions || []).filter((t) => t.status === 'Completed'),
-    [allTransactions]
-  );
-  const debts = useMemo(
-    () => (allTransactions || []).filter((t) => t.status === 'Pending'),
-    [allTransactions]
-  );
   const recentTransactions = useMemo(
     () => [...(allTransactions || [])].slice(0, 5),
     [allTransactions]
+  );
+
+  const totalExpenses = useMemo(
+    () => expenses.reduce((s, e) => s + e.amount, 0),
+    [expenses]
   );
 
   const debtSummary = useMemo(() => {
@@ -292,11 +320,18 @@ export default function Dashboard() {
     );
   }, [debts, searchTerm]);
 
+  const filteredExpenses = useMemo(() => {
+    return expenses.filter((tx) =>
+      tx.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (tx.category && tx.category.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+  }, [expenses, searchTerm]);
+
   const productAnalytics = useMemo(() => {
     const productSales = new Map<string, number>();
     const productCount = new Map<string, number>();
     allTransactions.forEach((t) => {
-      if (t.status === 'Completed' && t.items) {
+      if (t.status === 'Completed' && t.type !== 'expense' && t.items) {
         t.items.split(',').map((i) => i.trim()).forEach((item) => {
           productSales.set(item, (productSales.get(item) || 0) + t.amount);
           productCount.set(item, (productCount.get(item) || 0) + 1);
@@ -344,6 +379,13 @@ export default function Dashboard() {
     setDebtModalOpen(false);
   }, []);
 
+  const resetExpenseForm = useCallback(() => {
+    setExpenseDesc('');
+    setExpenseAmount('');
+    setExpenseCategory('Utilities');
+    setExpenseModalOpen(false);
+  }, []);
+
   const openSaleModal = () => {
     if (businessMode === 'products' && products.length === 0) {
       setInventoryPromptOpen(true);
@@ -354,6 +396,7 @@ export default function Dashboard() {
   };
 
   const openDebtModal = () => { resetDebtForm(); setDebtModalOpen(true); };
+  const openExpenseModal = () => { resetExpenseForm(); setExpenseModalOpen(true); };
 
   const addSaleItem = () => {
     const p = products.find((x) => x.id === saleProductId);
@@ -413,6 +456,7 @@ export default function Dashboard() {
         amount: saleTotal,
         method: saleMethod,
         status: 'Completed',
+        type: 'sale',
         date: now.toLocaleDateString('en-LS', { month: 'short', day: 'numeric', year: 'numeric' }),
         time: now.toLocaleTimeString('en-LS', { hour: '2-digit', minute: '2-digit', hour12: false })
       });
@@ -443,6 +487,7 @@ export default function Dashboard() {
         amount: debtTotal,
         method: 'Cash',
         status: 'Pending',
+        type: 'debt',
         date: now.toLocaleDateString('en-LS', { month: 'short', day: 'numeric', year: 'numeric' }),
         time: now.toLocaleTimeString('en-LS', { hour: '2-digit', minute: '2-digit', hour12: false }),
         customerPhone: debtPhone.trim(),
@@ -457,6 +502,34 @@ export default function Dashboard() {
     } catch (err) {
       console.error(err);
       alert('Failed to save debt.');
+    }
+  };
+
+  const submitExpense = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    const amt = parseFloat(expenseAmount);
+    if (!expenseDesc.trim() || !amt || amt <= 0) {
+      alert('Enter a description and amount.');
+      return;
+    }
+    const now = new Date();
+    try {
+      await createTransaction(user.uid, {
+        name: expenseDesc.trim(),
+        items: expenseCategory,
+        amount: amt,
+        method: 'Cash',
+        status: 'Completed',
+        type: 'expense',
+        category: expenseCategory,
+        date: now.toLocaleDateString('en-LS', { month: 'short', day: 'numeric', year: 'numeric' }),
+        time: now.toLocaleTimeString('en-LS', { hour: '2-digit', minute: '2-digit', hour12: false })
+      });
+      resetExpenseForm();
+    } catch (err) {
+      console.error(err);
+      alert('Failed to save expense.');
     }
   };
 
@@ -540,7 +613,9 @@ export default function Dashboard() {
         ['EcoCash', formatCurrency(dailyStats.ecocash)],
         ['Cash', formatCurrency(dailyStats.cash)],
         ['Card', formatCurrency(dailyStats.card)],
-        ['Owed', formatCurrency(dailyStats.owed)]
+        ['Owed', formatCurrency(dailyStats.owed)],
+        ['Expenses', formatCurrency(dailyStats.expenses)],
+        ['Profit', formatCurrency(dailyStats.profit)]
       ],
       headStyles: { fillColor: [124, 58, 237] }
     });
@@ -548,10 +623,10 @@ export default function Dashboard() {
   };
 
   const exportToCSV = () => {
-    const headers = ['Type', 'Customer', 'Phone', 'Email', 'Items', 'Amount', 'Paid', 'Balance', 'Method', 'Status', 'Due', 'Date', 'Time'];
+    const headers = ['Type', 'Customer/Description', 'Category', 'Phone', 'Email', 'Items', 'Amount', 'Paid', 'Balance', 'Method', 'Status', 'Due', 'Date', 'Time'];
     const rows = allTransactions.map((t) => [
-      t.status === 'Pending' ? 'Debt' : 'Sale',
-      t.name, t.customerPhone ?? '', t.customerEmail ?? '',
+      t.type === 'expense' ? 'Expense' : t.status === 'Pending' ? 'Debt' : 'Sale',
+      t.name, t.category ?? '', t.customerPhone ?? '', t.customerEmail ?? '',
       t.items ?? '', t.amount, t.amountPaid ?? t.amount,
       t.amount - (t.amountPaid ?? 0), t.method, t.status,
       t.dueDate ?? '', t.date, t.time
@@ -568,8 +643,9 @@ export default function Dashboard() {
 
   const exportToExcel = () => {
     const rows = allTransactions.map((t) => ({
-      Type: t.status === 'Pending' ? 'Debt' : 'Sale',
-      Customer: t.name,
+      Type: t.type === 'expense' ? 'Expense' : t.status === 'Pending' ? 'Debt' : 'Sale',
+      'Customer/Description': t.name,
+      Category: t.category ?? '',
       Phone: t.customerPhone ?? '',
       Email: t.customerEmail ?? '',
       Items: t.items ?? '',
@@ -727,6 +803,10 @@ export default function Dashboard() {
                       <HandCoins size={18} />
                       <span>Record Debt</span>
                     </button>
+                    <button onClick={openExpenseModal} className="group flex items-center justify-center gap-2 bg-slate-700 text-white px-5 py-3.5 rounded-2xl font-semibold shadow-lg hover:shadow-xl hover:bg-slate-800 transition-all">
+                      <Receipt size={18} />
+                      <span>Record Expense</span>
+                    </button>
                   </div>
                 </div>
               </section>
@@ -763,6 +843,23 @@ export default function Dashboard() {
                     <p className="sf-meta mt-1">On hand</p>
                   </div>
                 </div>
+
+                <div className="grid grid-cols-2 gap-3 md:gap-4 mt-3">
+                  <div className="p-4 rounded-2xl border border-red-200 bg-red-50">
+                    <div className="flex justify-between items-start mb-3"><p className="sf-eyebrow text-red-700">Expenses</p><Receipt size={16} className="text-red-500" /></div>
+                    <p className="sf-metric text-red-900">{formatCurrency(dailyStats.expenses)}</p>
+                    <p className="sf-meta text-red-700 mt-1">{dailyStats.expenseCount} recorded today</p>
+                  </div>
+                  <div className={`p-4 rounded-2xl border ${dailyStats.profit >= 0 ? 'border-emerald-200 bg-emerald-50' : 'border-red-200 bg-red-50'}`}>
+                    <div className="flex justify-between items-start mb-3">
+                      <p className={`sf-eyebrow ${dailyStats.profit >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>Profit</p>
+                      <TrendingUp size={16} className={dailyStats.profit >= 0 ? 'text-emerald-500' : 'text-red-500'} />
+                    </div>
+                    <p className={`sf-metric ${dailyStats.profit >= 0 ? 'text-emerald-900' : 'text-red-900'}`}>{formatCurrency(dailyStats.profit)}</p>
+                    <p className={`sf-meta mt-1 ${dailyStats.profit >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>Revenue − Expenses</p>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 gap-3 md:gap-4 mt-3">
                   <div className="p-4 rounded-2xl border border-amber-200 bg-amber-50">
                     <div className="flex justify-between items-start mb-3"><p className="sf-eyebrow text-amber-700">Sekoloto</p><AlertTriangle size={16} className="text-amber-500" /></div>
@@ -776,7 +873,7 @@ export default function Dashboard() {
                 <StatCard title="Total Revenue" value={formatCurrency(stats.totalRevenue)} change="All time" />
                 <StatCard title="M-Pesa" value={formatCurrency(stats.mpesaVolume)} color="red" />
                 <StatCard title="EcoCash" value={formatCurrency(stats.ecocashVolume)} color="purple" />
-                <StatCard title="Outstanding Debts" value={formatCurrency(debtSummary.total)} color="amber" />
+                <StatCard title="Total Expenses" value={formatCurrency(totalExpenses)} color="red" />
               </div>
 
               {debts.length > 0 && (
@@ -860,9 +957,7 @@ export default function Dashboard() {
                     <button onClick={openSaleModal} className="flex flex-col items-center gap-2 p-4 bg-purple-50 rounded-xl hover:bg-purple-100 transition"><Plus size={24} className="text-purple-600" /><span className="text-xs font-bold text-purple-700">Record Sale</span></button>
                   )}
                   <button onClick={openDebtModal} className="flex flex-col items-center gap-2 p-4 bg-amber-50 rounded-xl hover:bg-amber-100 transition"><HandCoins size={24} className="text-amber-600" /><span className="text-xs font-bold text-amber-700">Record Debt</span></button>
-                  {usesInventory(businessMode) && (
-                    <button onClick={() => setCurrentView('inventory')} className="flex flex-col items-center gap-2 p-4 bg-purple-50 rounded-xl hover:bg-purple-100 transition"><Boxes size={24} className="text-purple-600" /><span className="text-xs font-bold text-purple-700">Inventory</span></button>
-                  )}
+                  <button onClick={openExpenseModal} className="flex flex-col items-center gap-2 p-4 bg-red-50 rounded-xl hover:bg-red-100 transition"><Receipt size={24} className="text-red-600" /><span className="text-xs font-bold text-red-700">Record Expense</span></button>
                   <button onClick={() => setAiDrawerOpen(true)} className="flex flex-col items-center gap-2 p-4 bg-purple-50 rounded-xl hover:bg-purple-100 transition"><Bot size={24} className="text-purple-600" /><span className="text-xs font-bold text-purple-700">AI Assistant</span></button>
                 </div>
               </div>
@@ -882,11 +977,12 @@ export default function Dashboard() {
                   <div className="space-y-2">
                     {recentTransactions.map((tx) => {
                       const isDebt = tx.status === 'Pending';
+                      const isExpense = tx.type === 'expense';
                       return (
                         <div key={tx.id} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl">
                           <div className="flex items-center gap-3">
-                            <div className={`p-2 rounded-lg ${isDebt ? 'bg-amber-100' : 'bg-emerald-100'}`}>
-                              {isDebt ? <HandCoins size={14} className="text-amber-600" /> : <CheckCircle2 size={14} className="text-emerald-600" />}
+                            <div className={`p-2 rounded-lg ${isExpense ? 'bg-red-100' : isDebt ? 'bg-amber-100' : 'bg-emerald-100'}`}>
+                              {isExpense ? <Receipt size={14} className="text-red-600" /> : isDebt ? <HandCoins size={14} className="text-amber-600" /> : <CheckCircle2 size={14} className="text-emerald-600" />}
                             </div>
                             <div>
                               <p className="font-medium text-sm">{tx.name}</p>
@@ -894,8 +990,12 @@ export default function Dashboard() {
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="font-bold text-sm tabular-nums">{formatCurrency(tx.amount)}</p>
-                            <p className={`text-[10px] font-bold uppercase ${isDebt ? 'text-amber-600' : 'text-emerald-600'}`}>{isDebt ? 'Debt' : 'Paid'}</p>
+                            <p className={`font-bold text-sm tabular-nums ${isExpense ? 'text-red-600' : ''}`}>
+                              {isExpense ? '−' : ''}{formatCurrency(tx.amount)}
+                            </p>
+                            <p className={`text-[10px] font-bold uppercase ${isExpense ? 'text-red-600' : isDebt ? 'text-amber-600' : 'text-emerald-600'}`}>
+                              {isExpense ? 'Expense' : isDebt ? 'Debt' : 'Paid'}
+                            </p>
                           </div>
                         </div>
                       );
@@ -918,7 +1018,7 @@ export default function Dashboard() {
                 <div className="p-6 md:p-8 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                   <div>
                     <h3 className="text-2xl font-bold text-slate-900">Business Ledger</h3>
-                    <p className="text-slate-500 text-sm mt-1">Sales and debts separated</p>
+                    <p className="text-slate-500 text-sm mt-1">Sales, debts and expenses</p>
                   </div>
                   <div className="relative w-full md:w-80">
                     <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
@@ -935,6 +1035,9 @@ export default function Dashboard() {
                   )}
                   <button onClick={() => setLedgerTab('debts')} className={`px-4 py-3 rounded-t-xl font-semibold text-sm flex items-center gap-2 ${ledgerTab === 'debts' ? 'text-amber-600 border-b-2 border-amber-600' : 'text-slate-500'}`}>
                     <HandCoins size={16} /> Debts ({debts.length})
+                  </button>
+                  <button onClick={() => setLedgerTab('expenses')} className={`px-4 py-3 rounded-t-xl font-semibold text-sm flex items-center gap-2 ${ledgerTab === 'expenses' ? 'text-red-600 border-b-2 border-red-600' : 'text-slate-500'}`}>
+                    <Receipt size={16} /> Expenses ({expenses.length})
                   </button>
                 </div>
 
@@ -1059,6 +1162,49 @@ export default function Dashboard() {
                             </tr>
                           );
                         })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {ledgerTab === 'expenses' && (
+                  <div className="overflow-x-auto sf-scroll">
+                    <table className="w-full text-left" aria-label="Expenses">
+                      <thead>
+                        <tr className="text-slate-500 text-[10px] uppercase font-bold tracking-widest bg-slate-50/70">
+                          <th className="py-4 px-6">Description</th>
+                          <th className="py-4 px-6">Category</th>
+                          <th className="py-4 px-6 text-right">Amount</th>
+                          <th className="py-4 px-6 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {filteredExpenses.length === 0 ? (
+                          <tr><td colSpan={4} className="py-14 text-center">
+                            <div className="mx-auto h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center mb-3"><Receipt size={22} className="text-slate-400" /></div>
+                            <p className="font-semibold text-slate-700 text-sm">No expenses recorded</p>
+                            <p className="text-slate-500 text-xs mt-1 mb-4">Record your first expense to see it here.</p>
+                            <button onClick={openExpenseModal} className="px-4 py-2 rounded-xl bg-red-600 text-white font-semibold text-xs hover:bg-red-700">Record Expense</button>
+                          </td></tr>
+                        ) : filteredExpenses.map((tx) => (
+                          <tr key={tx.id} className="hover:bg-slate-50/80">
+                            <td className="py-4 px-6">
+                              <span className="text-sm font-bold text-slate-900 block">{tx.name}</span>
+                              <span className="text-[10px] text-slate-400 uppercase">{tx.date} • {tx.time}</span>
+                            </td>
+                            <td className="py-4 px-6">
+                              <span className="text-[10px] font-bold uppercase bg-red-100 text-red-700 px-2.5 py-1 rounded-lg">
+                                {tx.category || 'Other'}
+                              </span>
+                            </td>
+                            <td className="py-4 px-6 text-right font-bold tabular-nums text-red-600">−{formatCurrency(tx.amount)}</td>
+                            <td className="py-4 px-6 text-right">
+                              <button onClick={() => deleteTx(tx.id)} className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-red-600 rounded-lg" title="Delete">
+                                <Trash2 size={15} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
                       </tbody>
                     </table>
                   </div>
@@ -1245,6 +1391,49 @@ export default function Dashboard() {
             </div>
           )}
 
+          {expenseModalOpen && (
+            <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-slate-900/50 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) resetExpenseForm(); }}>
+              <div role="dialog" aria-modal="true" className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 md:p-8 shadow-2xl relative">
+                <button onClick={resetExpenseForm} className="absolute right-4 top-4 text-slate-400 hover:text-slate-900 p-2 rounded-xl hover:bg-slate-100" aria-label="Close"><X size={22} /></button>
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 bg-red-100 rounded-xl"><Receipt size={22} className="text-red-600" /></div>
+                  <div>
+                    <h2 className="text-xl font-bold">Record Expense</h2>
+                    <p className="text-xs text-slate-500">Money going out</p>
+                  </div>
+                </div>
+                <form onSubmit={submitExpense} className="space-y-4">
+                  <div>
+                    <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">What did you spend on?</label>
+                    <input required autoFocus value={expenseDesc} onChange={(e) => setExpenseDesc(e.target.value)} placeholder="E.g., Electricity bill" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-red-300 focus:ring-4 focus:ring-red-100 outline-none font-semibold" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">Category</label>
+                    <div className="grid grid-cols-3 gap-2 mt-1">
+                      {EXPENSE_CATEGORIES.map((cat) => (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => setExpenseCategory(cat)}
+                          className={`py-2.5 rounded-xl text-[11px] font-bold uppercase border-2 transition-all ${expenseCategory === cat ? 'border-red-600 bg-red-50 text-red-700' : 'border-slate-200 text-slate-400'}`}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">Amount (LSL)</label>
+                    <input required type="number" step="0.01" value={expenseAmount} onChange={(e) => setExpenseAmount(e.target.value)} placeholder="0.00" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-red-300 focus:ring-4 focus:ring-red-100 outline-none font-bold text-2xl text-red-600 tabular-nums" />
+                  </div>
+                  <button type="submit" className="w-full bg-red-600 text-white py-4 rounded-2xl font-bold hover:bg-red-700 flex items-center justify-center gap-2">
+                    <CheckCircle2 size={18} /> Save Expense
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+
           {inventoryPromptOpen && (
             <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) setInventoryPromptOpen(false); }}>
               <div role="dialog" aria-modal="true" className="bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl text-center">
@@ -1324,6 +1513,8 @@ export default function Dashboard() {
                   <div className="space-y-3 text-sm">
                     <div className="flex justify-between"><span className="text-slate-600">Total Revenue</span><span className="font-bold tabular-nums">{formatCurrency(stats.totalRevenue)}</span></div>
                     <div className="flex justify-between"><span className="text-slate-600">Average Sale</span><span className="font-bold tabular-nums">{formatCurrency(stats.totalRevenue / (sales.length || 1))}</span></div>
+                    <div className="flex justify-between"><span className="text-slate-600">Total Expenses</span><span className="font-bold text-red-600 tabular-nums">{formatCurrency(totalExpenses)}</span></div>
+                    <div className="flex justify-between border-t pt-3"><span className="text-slate-900 font-bold">Net Profit</span><span className={`font-black tabular-nums ${stats.totalRevenue - totalExpenses >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{formatCurrency(stats.totalRevenue - totalExpenses)}</span></div>
                   </div>
                 </div>
                 <div className="sf-card p-6">
@@ -1364,13 +1555,14 @@ export default function Dashboard() {
             <div className="space-y-6">
               <div className="bg-gradient-to-br from-purple-600 to-purple-800 rounded-3xl p-8 text-white shadow-lg">
                 <p className="text-sm opacity-80 mb-2">Available Balance</p>
-                <p className="text-4xl md:text-5xl font-bold tabular-nums">{formatCurrency(stats.totalRevenue - stats.totalPending)}</p>
+                <p className="text-4xl md:text-5xl font-bold tabular-nums">{formatCurrency(stats.totalRevenue - stats.totalPending - totalExpenses)}</p>
                 <p className="text-xs opacity-70 mt-2">Pending (debts): {formatCurrency(stats.totalPending)}</p>
+                <p className="text-xs opacity-70 mt-1">Total expenses: {formatCurrency(totalExpenses)}</p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="sf-card p-4"><TrendingUp className="text-emerald-600 mb-2" size={24} /><p className="text-2xl font-bold tabular-nums">{formatCurrency(dailyStats.revenue)}</p><p className="text-xs text-slate-500">Today's earnings</p></div>
-                <div className="sf-card p-4"><History className="text-purple-600 mb-2" size={24} /><p className="text-2xl font-bold tabular-nums">{allTransactions.length}</p><p className="text-xs text-slate-500">Total records</p></div>
-                <div className="sf-card p-4"><Wallet className="text-purple-600 mb-2" size={24} /><p className="text-2xl font-bold tabular-nums">{formatCurrency(stats.totalRevenue)}</p><p className="text-xs text-slate-500">Lifetime revenue</p></div>
+                <div className="sf-card p-4"><TrendingUp className="text-emerald-600 mb-2" size={24} /><p className="text-2xl font-bold tabular-nums">{formatCurrency(dailyStats.revenue)}</p><p className="text-xs text-slate-500">Today's revenue</p></div>
+                <div className="sf-card p-4"><Receipt className="text-red-600 mb-2" size={24} /><p className="text-2xl font-bold tabular-nums">{formatCurrency(dailyStats.expenses)}</p><p className="text-xs text-slate-500">Today's expenses</p></div>
+                <div className="sf-card p-4"><Wallet className="text-purple-600 mb-2" size={24} /><p className="text-2xl font-bold tabular-nums">{formatCurrency(dailyStats.profit)}</p><p className="text-xs text-slate-500">Today's profit</p></div>
               </div>
             </div>
           )}
@@ -1516,7 +1708,6 @@ export default function Dashboard() {
           </footer>
         </main>
 
-        {/* ===== FLOATING AI BUTTON ===== */}
         <button
           onClick={() => setAiDrawerOpen(true)}
           aria-label="Open AI Assistant"
@@ -1526,7 +1717,6 @@ export default function Dashboard() {
           <span className="hidden md:inline text-sm font-bold">Ask AI</span>
         </button>
 
-        {/* ===== AI DRAWER ===== */}
         {aiDrawerOpen && (
           <>
             <div
@@ -1562,7 +1752,6 @@ export default function Dashboard() {
           </>
         )}
 
-        {/* ===== SCROLL TO TOP ===== */}
         <button onClick={() => { document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' }); window.scrollTo({ top: 0, behavior: 'smooth' }); }} aria-label="Scroll to top"
           className={`fixed bottom-6 right-4 md:right-6 z-40 p-3 rounded-full bg-slate-900 text-white shadow-2xl transition-all ${showScrollTop ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}>
           <ArrowUp size={20} strokeWidth={3} />

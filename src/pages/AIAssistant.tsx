@@ -22,19 +22,11 @@ interface Message {
   timestamp: string;
 }
 
-/**
- * Per-user storage key.
- * Uses the current user's email so each account has its own chat history.
- * Falls back to 'anon' if not logged in.
- */
 function getChatStorageKey(): string {
   const email = localStorage.getItem('khotsopay_user_email') || 'anon';
   return `khotsopay_ai_chat_${email}`;
 }
 
-/**
- * Turn the last question + business signals into contextual follow-up prompts.
- */
 function buildSuggestions(
   question: string,
   ctx: BusinessContext,
@@ -47,7 +39,13 @@ function buildSuggestions(
   if (/owe|debt|kolot|pending|unpaid/.test(q)) {
     en.push('Draft a reminder message for debtors', 'How do I reduce unpaid debts?');
     st.push('Ngola molaetsa oa ho hopotsa ba kolotang', 'Nka fokotsa sekoloto joang?');
-  } else if (/sell|revenue|sale|profit|chelete|thekiso/.test(q)) {
+  } else if (/expense|spend|cost|litšenyehelo|tšebeliso/.test(q)) {
+    en.push('How do I reduce my expenses?', 'Which category costs me most?');
+    st.push('Nka fokotsa litšenyehelo joang?', 'Ke karolo efe e nkostsang haholo?');
+  } else if (/profit|margin|phallo|pholokelo/.test(q)) {
+    en.push('How can I increase profit?', 'What is my profit margin?');
+    st.push('Nka eketsa pholokelo joang?', 'Pholokelo ea ka ke efe?');
+  } else if (/sell|revenue|sale|chelete|thekiso/.test(q)) {
     en.push('What is my profit margin?', 'Which days sell the most?');
     st.push('Phallo ea ka ke efe?', 'Ke matsatsi afe a rekisoang haholo?');
   } else if (/stock|inventory|thepa|restock|low/.test(q)) {
@@ -57,8 +55,8 @@ function buildSuggestions(
     en.push('How can I improve cash flow?', 'What are my biggest expenses?');
     st.push('Nka ntlafatsa phallo ea chelete joang?', 'Litšenyehelo tse kholo ke life?');
   } else {
-    en.push('Summarize my finances', 'Who owes me money?', 'Top selling products');
-    st.push('Kakaretso ea lichelete', 'Ke mang ea ntseng a kolota?', 'Thepa e rekisoang haholo');
+    en.push('Summarize my finances', 'Who owes me money?', 'Am I making a profit?');
+    st.push('Kakaretso ea lichelete', 'Ke mang ea ntseng a kolota?', 'Na ke etsa pholokelo?');
   }
 
   if (ctx.lowStockCount > 0) {
@@ -86,10 +84,8 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
       ? 'Lumela! Ke mothusi oa hau oa lichelete. Botsa lipotso ka khoebo ea hau.'
       : 'Hello! I am your financial assistant. Ask me anything about your business.';
 
-  // Per-user storage key — computed once on mount
   const storageKey = useMemo(() => getChatStorageKey(), []);
 
-  // Load this user's chat history on mount
   const [messages, setMessages] = useState<Message[]>(() => {
     try {
       const stored = localStorage.getItem(storageKey);
@@ -99,9 +95,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
           return parsed as Message[];
         }
       }
-    } catch {
-      // ignore corrupt data
-    }
+    } catch {}
     return [
       {
         id: 'welcome',
@@ -117,18 +111,14 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
-  // Persist messages to localStorage on every change (this user only)
   useEffect(() => {
     try {
       localStorage.setItem(storageKey, JSON.stringify(messages));
-    } catch {
-      // ignore quota errors
-    }
+    } catch {}
   }, [messages, storageKey]);
 
   const buildContext = (): BusinessContext => {
@@ -137,14 +127,31 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
     });
     const todayTx = transactions.filter(t => t.date === todayStr);
 
-    const totalRevenue = transactions.filter(t => t.status === 'Completed').reduce((s, t) => s + t.amount, 0);
-    const totalPending = transactions.filter(t => t.status === 'Pending').reduce((s, t) => s + t.amount, 0);
-    const todayRevenue = todayTx.filter(t => t.status === 'Completed').reduce((s, t) => s + t.amount, 0);
-    const todayOwed = todayTx.filter(t => t.status === 'Pending').reduce((s, t) => s + t.amount, 0);
+    // Only count SALES as revenue (not expenses, not pending)
+    const salesOnly = transactions.filter(t => t.status === 'Completed' && t.type !== 'expense');
+    const expensesOnly = transactions.filter(t => t.type === 'expense');
 
+    const totalRevenue = salesOnly.reduce((s, t) => s + t.amount, 0);
+    const totalPending = transactions.filter(t => t.status === 'Pending').reduce((s, t) => s + t.amount, 0);
+
+    const todayRevenue = todayTx
+      .filter(t => t.status === 'Completed' && t.type !== 'expense')
+      .reduce((s, t) => s + t.amount, 0);
+
+    const todayOwed = todayTx
+      .filter(t => t.status === 'Pending')
+      .reduce((s, t) => s + t.amount, 0);
+
+    // NEW: expenses
+    const totalExpenses = expensesOnly.reduce((s, t) => s + t.amount, 0);
+    const todayExpenses = todayTx
+      .filter(t => t.type === 'expense')
+      .reduce((s, t) => s + t.amount, 0);
+
+    // Build top products from sales only (not expenses)
     const salesMap = new Map<string, { sales: number; revenue: number }>();
-    transactions
-      .filter(t => t.status === 'Completed' && t.items)
+    salesOnly
+      .filter(t => t.items)
       .forEach(t => {
         const itemsText = t.items || '';
         if (!itemsText) return;
@@ -164,16 +171,26 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
     const totalStockValue = products.reduce((s, p) => s + p.buyingPrice * p.stockQuantity, 0);
 
     const recentTransactions = [...transactions].slice(0, 5).map(t => ({
-      name: t.name,
+      name: t.type === 'expense' ? `[Expense] ${t.name}` : t.name,
       items: t.items || '-',
       amount: t.amount,
-      status: t.status === 'Completed' ? 'Paid' : 'Owed'
+      status: t.type === 'expense' ? 'Expense' : t.status === 'Completed' ? 'Paid' : 'Owed'
     }));
 
     return {
-      businessName, totalRevenue, totalPending, todayRevenue, todayOwed,
-      totalProducts: products.length, lowStockCount, outOfStockCount,
-      totalStockValue, topProducts, recentTransactions
+      businessName,
+      totalRevenue,
+      totalPending,
+      todayRevenue,
+      todayOwed,
+      totalProducts: products.length,
+      lowStockCount,
+      outOfStockCount,
+      totalStockValue,
+      topProducts,
+      recentTransactions,
+      totalExpenses,
+      todayExpenses
     };
   };
 
@@ -297,8 +314,8 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
     const lastUser = [...messages].reverse().find(m => m.role === 'user');
     if (!lastUser) {
       return language === 'st'
-        ? ['Kakaretso ea lichelete', 'Ke mang ea ntseng a kolota?', 'Thepa e rekisoang haholo']
-        : ['Summarize my finances', 'Who owes me money?', 'Top selling products'];
+        ? ['Kakaretso ea lichelete', 'Ke mang ea ntseng a kolota?', 'Na ke etsa pholokelo?']
+        : ['Summarize my finances', 'Who owes me money?', 'Am I making a profit?'];
     }
     const lastAi = [...messages].reverse().find(m => m.role === 'ai' && m.id !== 'welcome');
     if (!lastAi || loading) return [];
@@ -352,7 +369,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
           </>
         ) : (
           <>
-            <strong>Why use the AI?</strong> It reads your real transaction and inventory data to give you instant answers about cash flow, debts, and stock levels—helping you make faster decisions.
+            <strong>Why use the AI?</strong> It reads your real transaction and inventory data to give you instant answers about cash flow, debts, profit, and stock levels—helping you make faster decisions.
           </>
         )}
       </div>
@@ -469,9 +486,9 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
             <div className="flex flex-wrap gap-2">
               {[
                 language === 'st' ? 'Kakaretso ea lichelete' : 'Summarize my finances',
-                language === 'st' ? 'Ke na le chelete e kae?' : 'How is my cash flow?',
+                language === 'st' ? 'Na ke etsa pholokelo?' : 'Am I making a profit?',
+                language === 'st' ? 'Litšenyehelo tse kholo ke life?' : 'What are my biggest expenses?',
                 language === 'st' ? 'Ke mang ea ntseng a kolota?' : 'Who owes me money?',
-                language === 'st' ? 'Thepa efe e felang?' : 'Which products are low?',
                 language === 'st' ? 'Thepa e rekisoang haholo' : 'Top selling products',
               ].map((prompt) => (
                 <button
@@ -549,12 +566,12 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
           {language === 'st' ? 'U ka botsa' : 'You can ask'}
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-slate-600">
+          <div className="flex items-start gap-2"><span className="text-purple-600">•</span><span>"Am I making a profit?"</span></div>
+          <div className="flex items-start gap-2"><span className="text-purple-600">•</span><span>"What are my biggest expenses?"</span></div>
           <div className="flex items-start gap-2"><span className="text-purple-600">•</span><span>"How much did I sell today?"</span></div>
           <div className="flex items-start gap-2"><span className="text-purple-600">•</span><span>"Who owes me money?"</span></div>
           <div className="flex items-start gap-2"><span className="text-purple-600">•</span><span>"Which products sell best?"</span></div>
           <div className="flex items-start gap-2"><span className="text-purple-600">•</span><span>"What should I restock?"</span></div>
-          <div className="flex items-start gap-2"><span className="text-purple-600">•</span><span>"Is my business growing?"</span></div>
-          <div className="flex items-start gap-2"><span className="text-purple-600">•</span><span>"How much profit did I make?"</span></div>
         </div>
       </div>
     </div>
