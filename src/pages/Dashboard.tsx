@@ -101,6 +101,9 @@ export default function Dashboard() {
   const [paymentAmount, setPaymentAmount] = useState('');
   const [inventoryPromptOpen, setInventoryPromptOpen] = useState(false);
 
+  // ===== AI DRAWER STATE =====
+  const [aiDrawerOpen, setAiDrawerOpen] = useState(false);
+
   const [saleName, setSaleName] = useState('');
   const [saleItems, setSaleItems] = useState<SaleItem[]>([]);
   const [saleProductId, setSaleProductId] = useState('');
@@ -860,7 +863,7 @@ export default function Dashboard() {
                   {usesInventory(businessMode) && (
                     <button onClick={() => setCurrentView('inventory')} className="flex flex-col items-center gap-2 p-4 bg-purple-50 rounded-xl hover:bg-purple-100 transition"><Boxes size={24} className="text-purple-600" /><span className="text-xs font-bold text-purple-700">Inventory</span></button>
                   )}
-                  <button onClick={() => setCurrentView('ai')} className="flex flex-col items-center gap-2 p-4 bg-purple-50 rounded-xl hover:bg-purple-100 transition"><Bot size={24} className="text-purple-600" /><span className="text-xs font-bold text-purple-700">AI Assistant</span></button>
+                  <button onClick={() => setAiDrawerOpen(true)} className="flex flex-col items-center gap-2 p-4 bg-purple-50 rounded-xl hover:bg-purple-100 transition"><Bot size={24} className="text-purple-600" /><span className="text-xs font-bold text-purple-700">AI Assistant</span></button>
                 </div>
               </div>
 
@@ -1513,8 +1516,55 @@ export default function Dashboard() {
           </footer>
         </main>
 
+        {/* ===== FLOATING AI BUTTON ===== */}
+        <button
+          onClick={() => setAiDrawerOpen(true)}
+          aria-label="Open AI Assistant"
+          className="fixed bottom-24 right-4 md:bottom-24 md:right-6 z-40 flex items-center gap-2 bg-gradient-to-br from-purple-600 to-purple-800 text-white px-4 py-3 rounded-full shadow-2xl shadow-purple-500/40 hover:shadow-purple-500/60 hover:scale-105 active:scale-95 transition-all group"
+        >
+          <Bot size={20} className="group-hover:rotate-12 transition-transform" />
+          <span className="hidden md:inline text-sm font-bold">Ask AI</span>
+        </button>
+
+        {/* ===== AI DRAWER ===== */}
+        {aiDrawerOpen && (
+          <>
+            <div
+              className="fixed inset-0 z-[80] bg-slate-900/50 backdrop-blur-sm"
+              onClick={() => setAiDrawerOpen(false)}
+            />
+            <aside className="fixed top-0 right-0 bottom-0 z-[90] w-full sm:w-[480px] bg-slate-50 shadow-2xl flex flex-col">
+              <div className="flex items-center justify-between px-4 py-3 bg-white border-b border-slate-200">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-purple-100 rounded-lg">
+                    <Bot size={16} className="text-purple-700" />
+                  </div>
+                  <p className="text-sm font-bold text-slate-900">AI Assistant</p>
+                </div>
+                <button
+                  onClick={() => setAiDrawerOpen(false)}
+                  aria-label="Close AI Assistant"
+                  className="p-2 rounded-lg text-slate-400 hover:text-slate-900 hover:bg-slate-100"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4">
+                <AIAssistant
+                  businessName={localStorage.getItem('khotsopay_business') || 'SME'}
+                  transactions={allTransactions}
+                  products={products}
+                  onlineStatus={onlineStatus}
+                  language={appLanguage}
+                />
+              </div>
+            </aside>
+          </>
+        )}
+
+        {/* ===== SCROLL TO TOP ===== */}
         <button onClick={() => { document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' }); window.scrollTo({ top: 0, behavior: 'smooth' }); }} aria-label="Scroll to top"
-          className={`fixed bottom-24 md:bottom-8 right-4 md:right-8 z-40 p-3 rounded-full bg-purple-600 text-white shadow-2xl transition-all ${showScrollTop ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}>
+          className={`fixed bottom-6 right-4 md:right-6 z-40 p-3 rounded-full bg-slate-900 text-white shadow-2xl transition-all ${showScrollTop ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}>
           <ArrowUp size={20} strokeWidth={3} />
         </button>
       </div>
