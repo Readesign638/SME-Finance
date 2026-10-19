@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Bot, Send, WifiOff, Sparkles, AlertCircle, Loader2,
-  Copy, Check, RotateCcw, User
+  Copy, Check, RotateCcw, User, Trash2
 } from 'lucide-react';
 import { askGemini, type BusinessContext } from '../services/gemini';
 import type { Transaction } from '../types/schema';
@@ -20,6 +20,16 @@ interface Message {
   role: 'user' | 'ai';
   text: string;
   timestamp: string;
+}
+
+/**
+ * Per-user storage key.
+ * Uses the current user's email so each account has its own chat history.
+ * Falls back to 'anon' if not logged in.
+ */
+function getChatStorageKey(): string {
+  const email = localStorage.getItem('khotsopay_user_email') || 'anon';
+  return `khotsopay_ai_chat_${email}`;
 }
 
 /**
@@ -76,22 +86,50 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
       ? 'Lumela! Ke mothusi oa hau oa lichelete. Botsa lipotso ka khoebo ea hau.'
       : 'Hello! I am your financial assistant. Ask me anything about your business.';
 
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: 'welcome',
-      role: 'ai',
-      text: welcomeText,
-      timestamp: new Date().toLocaleTimeString('en-LS', { hour: '2-digit', minute: '2-digit' })
+  // Per-user storage key — computed once on mount
+  const storageKey = useMemo(() => getChatStorageKey(), []);
+
+  // Load this user's chat history on mount
+  const [messages, setMessages] = useState<Message[]>(() => {
+    try {
+      const stored = localStorage.getItem(storageKey);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed as Message[];
+        }
+      }
+    } catch {
+      // ignore corrupt data
     }
-  ]);
+    return [
+      {
+        id: 'welcome',
+        role: 'ai',
+        text: welcomeText,
+        timestamp: new Date().toLocaleTimeString('en-LS', { hour: '2-digit', minute: '2-digit' })
+      }
+    ];
+  });
+
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Auto-scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
+
+  // Persist messages to localStorage on every change (this user only)
+  useEffect(() => {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(messages));
+    } catch {
+      // ignore quota errors
+    }
+  }, [messages, storageKey]);
 
   const buildContext = (): BusinessContext => {
     const todayStr = new Date().toLocaleDateString('en-LS', {
@@ -239,6 +277,22 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
     sendQuestion(lastUser.text);
   };
 
+  const handleClearChat = () => {
+    if (!confirm(language === 'st' ? 'Hlakola nalane ea puisano?' : 'Clear chat history?')) return;
+    const fresh: Message[] = [
+      {
+        id: 'welcome',
+        role: 'ai',
+        text: welcomeText,
+        timestamp: new Date().toLocaleTimeString('en-LS', { hour: '2-digit', minute: '2-digit' })
+      }
+    ];
+    setMessages(fresh);
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(fresh));
+    } catch {}
+  };
+
   const suggestions = useMemo(() => {
     const lastUser = [...messages].reverse().find(m => m.role === 'user');
     if (!lastUser) {
@@ -257,6 +311,8 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
     return lastAi?.id ?? null;
   }, [messages]);
 
+  const hasUserMessages = messages.some(m => m.role === 'user');
+
   return (
     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-3xl mx-auto">
 
@@ -271,13 +327,25 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
             {language === 'st' ? 'Botsa ka khoebo ea hau' : 'Ask about your business finances'}
           </p>
         </div>
-        <span className="ml-auto inline-flex items-center gap-1 px-2 py-1 rounded-full bg-purple-50 text-purple-700 text-[10px] font-bold uppercase tracking-wider border border-purple-100">
-          <Sparkles size={10} /> Beta
-        </span>
+        <div className="ml-auto flex items-center gap-2">
+          {hasUserMessages && (
+            <button
+              onClick={handleClearChat}
+              aria-label="Clear chat history"
+              className="p-2 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition"
+              title={language === 'st' ? 'Hlakola puisano' : 'Clear chat'}
+            >
+              <Trash2 size={16} />
+            </button>
+          )}
+          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-purple-50 text-purple-700 text-[10px] font-bold uppercase tracking-wider border border-purple-100">
+            <Sparkles size={10} /> Beta
+          </span>
+        </div>
       </div>
 
       {/* Value banner */}
-      <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 text-sm text-blue-800">
+      <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 text-sm text-purple-800">
         {language === 'st' ? (
           <>
             <strong>Hobaneng u sebelisa AI?</strong> E bala lintlha tsa hau tsa 'nete tsa lichelete le thepa ho u fa likarabo tsa hang-hang mabapi le phallo ea chelete, mekoloto le boemo ba thepa—ho u thusa ho etsa liqeto kapele.
@@ -323,12 +391,12 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
                   <div
                     className={`rounded-2xl px-4 py-3 ${
                       message.role === 'user'
-                        ? 'bg-blue-600 text-white shadow-sm'
+                        ? 'bg-purple-600 text-white shadow-sm'
                         : 'bg-white border border-slate-200 text-slate-800 shadow-sm'
                     }`}
                   >
                     <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.text}</p>
-                    <p className={`text-[10px] mt-2 ${message.role === 'user' ? 'text-blue-200' : 'text-slate-400'}`}>
+                    <p className={`text-[10px] mt-2 ${message.role === 'user' ? 'text-purple-200' : 'text-slate-400'}`}>
                       {message.timestamp}
                     </p>
                   </div>
@@ -358,7 +426,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
                         <button
                           onClick={handleRetry}
                           disabled={loading || !onlineStatus}
-                          className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold text-slate-500 hover:text-blue-700 hover:bg-blue-50 transition disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-slate-500"
+                          className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold text-slate-500 hover:text-purple-700 hover:bg-purple-50 transition disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-slate-500"
                           title="Regenerate answer"
                           aria-label="Retry"
                         >
@@ -371,7 +439,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
                 </div>
 
                 {message.role === 'user' && (
-                  <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center flex-shrink-0">
+                  <div className="w-8 h-8 rounded-full bg-purple-600 text-white flex items-center justify-center flex-shrink-0">
                     <User size={16} />
                   </div>
                 )}

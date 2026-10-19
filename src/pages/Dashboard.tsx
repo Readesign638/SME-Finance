@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Search, Plus, Trash2, Edit3, X, LogOut,
   CheckCircle2, FileText, Download, LayoutDashboard, ListOrdered,
-ShieldCheck, MessageCircle, Mail,
+  ShieldCheck, MessageCircle, Mail,
   User, Settings, Wallet, TrendingUp, History, BarChart3, Bell, Save,
   Package, Wifi, WifiOff, Bot, AlertTriangle, Boxes, CreditCard, MessageSquare,
   ArrowUp, HandCoins, Banknote, Sparkles, Phone
@@ -20,8 +20,6 @@ import { Onboarding } from '../components/Onboarding';
 import Inventory from './Inventory';
 import AIAssistant from './AIAssistant';
 import BusinessSetup, { type BusinessMode } from './BusinessSetup';
-import MpesaLogo from '../assets/Mpesa.jpeg';
-import EcocashLogo from '../assets/Ecocash.jpeg';
 import type { Transaction, PaymentMethod } from '../types/schema';
 import type { Product, SaleItem } from '../types/product';
 import { useLocalStorage } from '../hooks/useLocalStorage';
@@ -41,6 +39,10 @@ import {
   logoutUser
 } from '../services/firebase';
 import { useLanguage } from '../hooks/useLanguage';
+
+// Logos served from public/ so they cache offline via the service worker
+const MpesaLogo = '/Mpesa.jpeg';
+const EcocashLogo = '/Ecocash.jpeg';
 
 type View =
   | 'dashboard' | 'transactions' | 'inventory' | 'analytics'
@@ -122,7 +124,7 @@ export default function Dashboard() {
     () => !localStorage.getItem('khotsopay_onboarded')
   );
 
- const [allTransactions, setAllTransactions] = useLocalStorage<Transaction[]>('khotsopay_tx', []);
+  const [allTransactions, setAllTransactions] = useLocalStorage<Transaction[]>('khotsopay_tx', []);
 
   const [products, setProducts] = useState<Product[]>(() => {
     const cached = localStorage.getItem('khotsopay_products_cache');
@@ -312,7 +314,6 @@ export default function Dashboard() {
     localStorage.setItem(`khotsopay_businessMode_${email}`, mode);
     localStorage.setItem(`khotsopay_businessType_${email}`, type);
     setBusinessMode(mode);
-    
   };
 
   const resetSaleForm = useCallback(() => {
@@ -655,20 +656,16 @@ export default function Dashboard() {
           />
         )}
 
-        <Sidebar activeView={currentView} onNavigate={setCurrentView} />
+        <Sidebar
+          activeView={currentView}
+          onNavigate={(v) => setCurrentView(v as View)}
+          onLogout={handleLogout}
+        />
 
-        <main className="flex-1 p-4 sm:p-6 md:p-12 pb-[calc(env(safe-area-inset-bottom)+80px)] md:pb-12 overflow-y-auto w-full max-w-7xl mx-auto">
+        <main className="flex-1 p-4 sm:p-6 md:p-12 pb-12 overflow-y-auto w-full max-w-7xl mx-auto">
 
-          <header className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 sticky top-0 bg-slate-50/85 backdrop-blur-md z-40 py-3 border-b border-slate-200/60 -mx-4 px-4 md:-mx-12 md:px-12">
-            <div className="flex items-center gap-3 md:hidden">
-              <div className="h-9 w-9 bg-purple-600 rounded-xl flex items-center justify-center text-white font-bold text-sm">SF</div>
-              <div>
-                <p className="text-sm font-bold leading-none">SME Finance</p>
-                <p className="text-[10px] text-slate-500 font-medium mt-0.5">{modeLabel(businessMode)}</p>
-              </div>
-            </div>
-
-            <nav className="flex gap-1 overflow-x-auto no-scrollbar md:order-2 bg-white border border-slate-200 rounded-2xl p-1 shadow-sm">
+          <header className="mb-8 flex flex-row justify-end items-center gap-2 sticky top-0 bg-slate-50/85 backdrop-blur-md z-40 py-3 border-b border-slate-200/60 -mx-4 pl-16 pr-4 md:-mx-12 md:px-12 md:pl-12">
+            <nav className="hidden md:flex gap-1 overflow-x-auto no-scrollbar md:order-2 bg-white border border-slate-200 rounded-2xl p-1 shadow-sm">
               {navItems.map((v) => {
                 const active = currentView === v;
                 return (
@@ -697,7 +694,7 @@ export default function Dashboard() {
                 <span className={`h-1.5 w-1.5 rounded-full ${onlineStatus ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
                 {onlineStatus ? <Wifi size={12} /> : <WifiOff size={12} />}
               </div>
-              <button onClick={handleLogout} title="Logout" aria-label="Logout" className="p-2.5 bg-white border border-slate-200 text-slate-500 rounded-xl hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-all">
+              <button onClick={handleLogout} title="Logout" aria-label="Logout" className="hidden md:block p-2.5 bg-white border border-slate-200 text-slate-500 rounded-xl hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-all">
                 <LogOut size={18} />
               </button>
             </div>

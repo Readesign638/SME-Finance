@@ -10,12 +10,21 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
+      includeAssets: [
+  'favicon.ico',
+  'apple-touch-icon.png',
+  'mask-icon.svg',
+  'logo.svg',
+  'Mpesa.jpeg',
+  'Ecocash.jpeg',
+  'pwa-192x192.png',
+  'pwa-512x512.png'
+],
       manifest: {
         name: 'Khotso-Pay Merchant Dashboard',
         short_name: 'Khotso-Pay',
         description: 'Offline-first Ledger for Lesotho Merchants',
-        theme_color: '#2563eb',
+        theme_color: '#7c3aed',
         background_color: '#f8fafc',
         display: 'standalone',
         orientation: 'portrait',
@@ -30,6 +39,22 @@ export default defineConfig({
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any maskable'
+          }
+        ]
+      },
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,jpg,jpeg,webp,woff,woff2}'],
+        runtimeCaching: [
+          {
+            urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico)$/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'images-cache',
+              expiration: {
+                maxEntries: 60,
+                maxAgeSeconds: 60 * 60 * 24 * 30
+              }
+            }
           }
         ]
       }
