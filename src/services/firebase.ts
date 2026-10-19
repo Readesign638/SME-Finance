@@ -30,14 +30,13 @@ import type { Transaction } from "../types/schema";
 export type TransactionInput = Omit<Transaction, 'id'>;
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDEuaxy66-JcuOyrqRD0FCQxGvOZNmvzMQ",
-  authDomain: "sme-finance-app-c02eb.firebaseapp.com",
-  projectId: "sme-finance-app-c02eb",
-  storageBucket: "sme-finance-app-c02eb.firebasestorage.app",
-  messagingSenderId: "986217939926",
-  appId: "1:986217939926:web:6eede5e4f7769a7422da77"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
-
 const app = initializeApp(firebaseConfig);
 
 // Initialize Firestore ONCE
