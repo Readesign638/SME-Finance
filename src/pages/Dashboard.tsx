@@ -477,11 +477,19 @@ export default function Dashboard() {
     if (businessMode !== 'products' && (!debtDesc.trim() || !debtAmount || parseFloat(debtAmount) <= 0)) {
       alert('Enter a description and amount.'); return;
     }
-    if (!debtPhone.trim()) { alert('Phone number is required for reminders.'); return; }
+    
+    // STRICT 8-DIGIT VALIDATION
+    const cleanPhone = debtPhone.trim().replace(/\D/g, '');
+    if (cleanPhone.length !== 8) { 
+      alert('Please enter a valid 8-digit Lesotho phone number (e.g., 58123456).'); 
+      return; 
+    }
+    
     if (!debtDueDate) { alert('Set a due date.'); return; }
     const now = new Date();
     try {
-      await createTransaction(user.uid, {
+      // Prevents sending "undefined" to Firebase which causes the save error
+      const txData: Record<string, unknown> = {
         name: debtName,
         items: debtItemsText,
         amount: debtTotal,
@@ -490,13 +498,16 @@ export default function Dashboard() {
         type: 'debt',
         date: now.toLocaleDateString('en-LS', { month: 'short', day: 'numeric', year: 'numeric' }),
         time: now.toLocaleTimeString('en-LS', { hour: '2-digit', minute: '2-digit', hour12: false }),
-        customerPhone: debtPhone.trim(),
-        customerEmail: debtEmail.trim() || undefined,
+        customerPhone: cleanPhone,
         dueDate: debtDueDate,
         amountPaid: 0,
-        remindersSent: 0,
-        notes: debtNotes.trim() || undefined
-      });
+        remindersSent: 0
+      };
+
+      if (debtEmail.trim()) txData.customerEmail = debtEmail.trim();
+      if (debtNotes.trim()) txData.notes = debtNotes.trim();
+
+      await createTransaction(user.uid, txData);
       if (businessMode === 'products') await deductStock(debtItems);
       resetDebtForm();
     } catch (err) {
@@ -555,17 +566,24 @@ export default function Dashboard() {
     const biz = localStorage.getItem('khotsopay_business') || 'SME Finance';
     const msg = `Lumela ${tx.name}! Reminder from ${biz}: outstanding ${formatCurrency(remaining)} for ${tx.items || 'purchase'}${tx.dueDate ? `, due ${tx.dueDate}` : ''}. Please settle via M-Pesa, EcoCash, Cash, or Card. Khotso!`;
 
+    let formattedPhone = tx.customerPhone ? tx.customerPhone.replace(/[^\d]/g, '') : '';
+    // Add Lesotho country code (+266) if it's an 8-digit local number
+    if (formattedPhone.length === 8) {
+      formattedPhone = '266' + formattedPhone;
+    }
+
     if (type === 'whatsapp') {
-      if (!tx.customerPhone) return;
-      const d = tx.customerPhone.replace(/[^\d]/g, '');
-      window.open(`https://wa.me/${d}?text=${encodeURIComponent(msg)}`, '_blank');
+      if (!formattedPhone) return;
+      window.open(`https://wa.me/${formattedPhone}?text=${encodeURIComponent(msg)}`, '_blank');
     } else if (type === 'email') {
       if (!tx.customerEmail) return;
-      window.open(`mailto:${tx.customerEmail}?subject=${encodeURIComponent('Payment Reminder')}&body=${encodeURIComponent(msg)}`, '_self');
+      // Opens Gmail's web compose window in a new tab (works perfectly on laptops)
+      const subject = encodeURIComponent('Payment Reminder');
+      const body = encodeURIComponent(msg);
+      window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${tx.customerEmail}&su=${subject}&body=${body}`, '_blank');
     } else {
-      if (!tx.customerPhone) return;
-      const d = tx.customerPhone.replace(/[^\d]/g, '');
-      window.open(`sms:${d}?body=${encodeURIComponent(msg)}`, '_self');
+      if (!formattedPhone) return;
+      window.open(`sms:${formattedPhone}?body=${encodeURIComponent(msg)}`, '_self');
     }
 
     try {
@@ -1318,7 +1336,16 @@ export default function Dashboard() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">Phone <span className="text-red-500">*</span></label>
-                      <input required type="tel" value={debtPhone} onChange={(e) => setDebtPhone(e.target.value)} placeholder="+266 5xxx xxxx" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-amber-300 focus:ring-4 focus:ring-amber-100 outline-none font-semibold" />
+                      <input 
+                        required 
+                        type="tel" 
+                        maxLength={8} 
+                        minLength={8}
+                        value={debtPhone} 
+                        onChange={(e) => setDebtPhone(e.target.value.replace(/\D/g, ''))} 
+                        placeholder="e.g. 58123456" 
+                        className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-amber-300 focus:ring-4 focus:ring-amber-100 outline-none font-semibold" 
+                      />
                     </div>
                     <div>
                       <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">Email <span className="text-slate-400 font-normal">(optional)</span></label>
