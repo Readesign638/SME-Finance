@@ -11,18 +11,18 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: [
-  'favicon.ico',
-  'apple-touch-icon.png',
-  'mask-icon.svg',
-  'logo.svg',
-  'Mpesa.jpeg',
-  'Ecocash.jpeg',
-  'pwa-192x192.png',
-  'pwa-512x512.png'
-],
+        'favicon.ico',
+        'apple-touch-icon.png',
+        'mask-icon.svg',
+        'logo.svg',
+        'Mpesa.jpeg',
+        'Ecocash.jpeg',
+        'pwa-192x192.png',
+        'pwa-512x512.png'
+      ],
       manifest: {
-        name: 'Khotso-Pay Merchant Dashboard',
-        short_name: 'Khotso-Pay',
+        name: 'SME Finance',
+        short_name: 'SME Finance', // <--- CHANGED FROM KHOTSO-PAY
         description: 'Offline-first Ledger for Lesotho Merchants',
         theme_color: '#7c3aed',
         background_color: '#f8fafc',
@@ -30,12 +30,12 @@ export default defineConfig({
         orientation: 'portrait',
         icons: [
           {
-            src: 'pwa-192x192.png',
+            src: 'pwa-192x192.png', // <--- REPLACE THIS FILE IN YOUR PUBLIC FOLDER
             sizes: '192x192',
             type: 'image/png'
           },
           {
-            src: 'pwa-512x512.png',
+            src: 'pwa-512x512.png', // <--- REPLACE THIS FILE IN YOUR PUBLIC FOLDER
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any maskable'

@@ -489,7 +489,7 @@ export default function Dashboard() {
     const now = new Date();
     try {
       // Prevents sending "undefined" to Firebase which causes the save error
-      const txData: Record<string, unknown> = {
+      const txData: any = {
         name: debtName,
         items: debtItemsText,
         amount: debtTotal,
