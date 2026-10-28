@@ -85,8 +85,6 @@ const LoginScreen: React.FC = () => {
       setPassword('');
     } catch (err: unknown) {
       if (err instanceof Error) {
-        // Firebase returns vague messages for unknown emails — that's by design (security)
-        // But we can improve UX for known error codes
         if (err.message.includes('user-not-found')) {
           setError('No account found with that email.');
         } else if (err.message.includes('invalid-email')) {
@@ -116,6 +114,14 @@ const LoginScreen: React.FC = () => {
       />
 
       <div className="relative z-10 w-full max-w-[440px]">
+        {/* Back to home */}
+        <button
+          onClick={() => navigate('/')}
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-white/70 hover:text-white transition mb-4 px-2 py-1 rounded-lg hover:bg-white/10"
+        >
+          <ArrowLeft size={14} /> Back to home
+        </button>
+
         <div className="bg-white rounded-3xl shadow-2xl p-8 md:p-10">
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center mb-3">

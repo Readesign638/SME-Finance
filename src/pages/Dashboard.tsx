@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Search, Plus, Trash2, Edit3, X, LogOut,
   CheckCircle2, FileText, Download, LayoutDashboard, ListOrdered,
-  ShieldCheck, MessageCircle, Mail,
+  ShieldCheck, MessageCircle, Mail, HelpCircle, Scale, BookOpen,
   User, Settings, Wallet, TrendingUp, History, BarChart3, Bell, Save,
   Package, Wifi, WifiOff, Bot, AlertTriangle, Boxes, CreditCard, MessageSquare,
   ArrowUp, HandCoins, Banknote, Sparkles, Phone, Receipt
@@ -17,12 +17,15 @@ import Sidebar from '../components/Sidebar';
 import { StatCard } from '../components/StatCard';
 import { TaxEstimator } from '../components/TaxEstimator';
 import { Onboarding } from '../components/Onboarding';
+import LegalGuide from '../components/LegalGuide';
+import HelpCenter from '../components/HelpCenter';
 import Inventory from './Inventory';
 import AIAssistant from './AIAssistant';
 import BusinessSetup, { type BusinessMode } from './BusinessSetup';
 import type { Transaction, PaymentMethod } from '../types/schema';
 import type { Product, SaleItem } from '../types/product';
 import { useLocalStorage } from '../hooks/useLocalStorage';
+import Logo from '../components/Logo';
 import { TransactionService } from '../services/transactionService';
 import {
   subscribeToProducts,
@@ -104,6 +107,8 @@ export default function Dashboard() {
   const [inventoryPromptOpen, setInventoryPromptOpen] = useState(false);
 
   const [aiDrawerOpen, setAiDrawerOpen] = useState(false);
+  const [legalGuideOpen, setLegalGuideOpen] = useState(false);
+  const [helpCenterOpen, setHelpCenterOpen] = useState(false);
 
   // Sale form
   const [saleName, setSaleName] = useState('');
@@ -477,32 +482,34 @@ export default function Dashboard() {
     if (businessMode !== 'products' && (!debtDesc.trim() || !debtAmount || parseFloat(debtAmount) <= 0)) {
       alert('Enter a description and amount.'); return;
     }
-    
-    // STRICT 8-DIGIT VALIDATION
+
     const cleanPhone = debtPhone.trim().replace(/\D/g, '');
-    if (cleanPhone.length !== 8) { 
-      alert('Please enter a valid 8-digit Lesotho phone number (e.g., 58123456).'); 
-      return; 
+    if (cleanPhone.length !== 8) {
+      alert('Please enter a valid 8-digit Lesotho phone number (e.g., 58123456).');
+      return;
     }
-    
+
     if (!debtDueDate) { alert('Set a due date.'); return; }
     const now = new Date();
     try {
-      // Prevents sending "undefined" to Firebase which causes the save error
-      const txData: any = {
-        name: debtName,
-        items: debtItemsText,
-        amount: debtTotal,
-        method: 'Cash',
-        status: 'Pending',
-        type: 'debt',
-        date: now.toLocaleDateString('en-LS', { month: 'short', day: 'numeric', year: 'numeric' }),
-        time: now.toLocaleTimeString('en-LS', { hour: '2-digit', minute: '2-digit', hour12: false }),
-        customerPhone: cleanPhone,
-        dueDate: debtDueDate,
-        amountPaid: 0,
-        remindersSent: 0
-      };
+     // ✅ After:
+const txData: Omit<Transaction, 'id'> = {
+  name: debtName,
+  items: debtItemsText,
+  amount: debtTotal,
+  method: 'Cash',
+  status: 'Pending',
+  type: 'debt',
+  date: now.toLocaleDateString('en-LS', { month: 'short', day: 'numeric', year: 'numeric' }),
+  time: now.toLocaleTimeString('en-LS', { hour: '2-digit', minute: '2-digit', hour12: false }),
+  customerPhone: cleanPhone,
+  dueDate: debtDueDate,
+  amountPaid: 0,
+  remindersSent: 0
+};
+
+if (debtEmail.trim()) txData.customerEmail = debtEmail.trim();
+if (debtNotes.trim()) txData.notes = debtNotes.trim();
 
       if (debtEmail.trim()) txData.customerEmail = debtEmail.trim();
       if (debtNotes.trim()) txData.notes = debtNotes.trim();
@@ -567,7 +574,6 @@ export default function Dashboard() {
     const msg = `Lumela ${tx.name}! Reminder from ${biz}: outstanding ${formatCurrency(remaining)} for ${tx.items || 'purchase'}${tx.dueDate ? `, due ${tx.dueDate}` : ''}. Please settle via M-Pesa, EcoCash, Cash, or Card. Khotso!`;
 
     let formattedPhone = tx.customerPhone ? tx.customerPhone.replace(/[^\d]/g, '') : '';
-    // Add Lesotho country code (+266) if it's an 8-digit local number
     if (formattedPhone.length === 8) {
       formattedPhone = '266' + formattedPhone;
     }
@@ -577,7 +583,6 @@ export default function Dashboard() {
       window.open(`https://wa.me/${formattedPhone}?text=${encodeURIComponent(msg)}`, '_blank');
     } else if (type === 'email') {
       if (!tx.customerEmail) return;
-      // Opens Gmail's web compose window in a new tab (works perfectly on laptops)
       const subject = encodeURIComponent('Payment Reminder');
       const body = encodeURIComponent(msg);
       window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${tx.customerEmail}&su=${subject}&body=${body}`, '_blank');
@@ -791,6 +796,9 @@ export default function Dashboard() {
                 <span className={`h-1.5 w-1.5 rounded-full ${onlineStatus ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
                 {onlineStatus ? <Wifi size={12} /> : <WifiOff size={12} />}
               </div>
+              <button onClick={() => setHelpCenterOpen(true)} title="Help Center" aria-label="Open Help Center" className="hidden md:flex p-2.5 bg-white border border-slate-200 text-slate-500 rounded-xl hover:text-purple-600 hover:border-purple-200 hover:bg-purple-50 transition-all">
+                <HelpCircle size={18} />
+              </button>
               <button onClick={handleLogout} title="Logout" aria-label="Logout" className="hidden md:block p-2.5 bg-white border border-slate-200 text-slate-500 rounded-xl hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-all">
                 <LogOut size={18} />
               </button>
@@ -1336,15 +1344,15 @@ export default function Dashboard() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">Phone <span className="text-red-500">*</span></label>
-                      <input 
-                        required 
-                        type="tel" 
-                        maxLength={8} 
+                      <input
+                        required
+                        type="tel"
+                        maxLength={8}
                         minLength={8}
-                        value={debtPhone} 
-                        onChange={(e) => setDebtPhone(e.target.value.replace(/\D/g, ''))} 
-                        placeholder="e.g. 58123456" 
-                        className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-amber-300 focus:ring-4 focus:ring-amber-100 outline-none font-semibold" 
+                        value={debtPhone}
+                        onChange={(e) => setDebtPhone(e.target.value.replace(/\D/g, ''))}
+                        placeholder="e.g. 58123456"
+                        className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-amber-300 focus:ring-4 focus:ring-amber-100 outline-none font-semibold"
                       />
                     </div>
                     <div>
@@ -1711,6 +1719,28 @@ export default function Dashboard() {
                   </p>
                 </div>
               </div>
+
+              <div className="sf-card p-6">
+                <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Scale size={20} className="text-purple-600" /> Legal & Compliance</h3>
+                <p className="text-sm text-slate-500 mb-4">
+                  Read our Terms, Privacy Policy, and learn about your tax and consumer-protection obligations in Lesotho.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    onClick={() => setLegalGuideOpen(true)}
+                    className="py-3 bg-slate-100 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-200 flex items-center justify-center gap-2"
+                  >
+                    <Scale size={16} /> Open Legal Guide
+                  </button>
+                  <button
+                    onClick={() => setHelpCenterOpen(true)}
+                    className="py-3 bg-purple-50 text-purple-700 rounded-xl font-bold text-sm hover:bg-purple-100 flex items-center justify-center gap-2"
+                  >
+                    <BookOpen size={16} /> Open Help Center
+                  </button>
+                </div>
+              </div>
+
               <div className="sf-card p-6">
                 <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><ShieldCheck size={20} className="text-purple-600" /> Data Management</h3>
                 <div className="space-y-3">
@@ -1724,15 +1754,89 @@ export default function Dashboard() {
           <footer className="mt-16 pt-8 border-t border-slate-200 pb-8">
             <div className="flex flex-col md:flex-row justify-between items-center gap-6">
               <div className="flex items-center gap-3">
-                <div className="h-9 w-9 bg-purple-600 rounded-xl flex items-center justify-center text-white font-bold text-sm">SF</div>
-                <div><p className="text-sm font-bold leading-none">SME Finance</p><p className="text-[10px] font-medium text-slate-500 mt-1">Merchant Suite · {modeLabel(businessMode)}</p></div>
+            <Logo size="sm" />
+                <div>
+                  <p className="text-sm font-bold leading-none">SME Finance</p>
+                  <p className="text-[10px] font-medium text-slate-500 mt-1">Merchant Suite · {modeLabel(businessMode)}</p>
+                </div>
               </div>
+
+              <nav
+                aria-label="Legal and help links"
+                className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] font-semibold text-slate-500"
+              >
+                <button
+                  onClick={() => setLegalGuideOpen(true)}
+                  className="hover:text-purple-600 transition-colors hover:underline underline-offset-2"
+                >
+                  Legal Guide
+                </button>
+                <span className="text-slate-300">·</span>
+                <button
+                  onClick={() => setLegalGuideOpen(true)}
+                  className="hover:text-purple-600 transition-colors hover:underline underline-offset-2"
+                >
+                  Privacy
+                </button>
+                <span className="text-slate-300">·</span>
+                <button
+                  onClick={() => setLegalGuideOpen(true)}
+                  className="hover:text-purple-600 transition-colors hover:underline underline-offset-2"
+                >
+                  Terms
+                </button>
+                <span className="text-slate-300">·</span>
+                <button
+                  onClick={() => setHelpCenterOpen(true)}
+                  className="hover:text-purple-600 transition-colors hover:underline underline-offset-2 flex items-center gap-1"
+                >
+                  <HelpCircle size={12} /> Help Center
+                </button>
+              </nav>
+
               <div className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-full shadow-sm">
                 <div className={`h-1.5 w-1.5 rounded-full ${onlineStatus ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
                 <span className="text-[10px] font-bold uppercase text-slate-600 tracking-wider">Lesotho · LSL</span>
               </div>
             </div>
+            <p className="text-center text-[10px] text-slate-400 mt-4">
+              © {new Date().getFullYear()} SME Finance. All rights reserved.
+            </p>
           </footer>
+
+          {/* Legal Guide Modal */}
+          {legalGuideOpen && (
+            <div
+              className="fixed inset-0 z-[85] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-slate-900/50 backdrop-blur-sm"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) setLegalGuideOpen(false);
+              }}
+            >
+              <div role="dialog" aria-modal="true" className="w-full max-w-3xl max-h-[92vh]">
+                <LegalGuide onClose={() => setLegalGuideOpen(false)} />
+              </div>
+            </div>
+          )}
+
+          {/* Help Center Modal */}
+          {helpCenterOpen && (
+            <div
+              className="fixed inset-0 z-[85] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-slate-900/50 backdrop-blur-sm"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) setHelpCenterOpen(false);
+              }}
+            >
+              <div role="dialog" aria-modal="true" className="w-full max-w-2xl max-h-[92vh]">
+                <HelpCenter
+                  onClose={() => setHelpCenterOpen(false)}
+                  onContactSupport={() => {
+                    setHelpCenterOpen(false);
+                    window.location.href = 'mailto:support@smefinance.ls';
+                  }}
+                />
+              </div>
+            </div>
+          )}
         </main>
 
         <button

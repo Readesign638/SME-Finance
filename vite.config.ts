@@ -24,7 +24,7 @@ export default defineConfig({
         name: 'SME Finance',
         short_name: 'SME Finance', // <--- CHANGED FROM KHOTSO-PAY
         description: 'Offline-first Ledger for Lesotho Merchants',
-        theme_color: '#7c3aed',
+        theme_color: '#ed3a8e',
         background_color: '#f8fafc',
         display: 'standalone',
         orientation: 'portrait',
