@@ -37,7 +37,7 @@ import {
   auth,
   subscribeToTransactions,
   createTransaction,
-  editTransaction,
+  editTransaction, // <-- Make sure this is imported!
   removeTransaction,
   logoutUser
 } from '../services/firebase';
@@ -98,6 +98,10 @@ export default function Dashboard() {
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const [ledgerTab, setLedgerTab] = useState<LedgerTab>('sales');
   const [searchTerm, setSearchTerm] = useState<string>('');
+
+  // --- EDITING STATES ---
+  const [editingSaleId, setEditingSaleId] = useState<string | null>(null);
+  const [editingDebtId, setEditingDebtId] = useState<string | null>(null);
 
   const [saleModalOpen, setSaleModalOpen] = useState(false);
   const [debtModalOpen, setDebtModalOpen] = useState(false);
@@ -367,6 +371,7 @@ export default function Dashboard() {
     setSaleMethod('M-Pesa');
     setSaleDesc('');
     setSaleAmount('');
+    setEditingSaleId(null); // Clear editing state
     setSaleModalOpen(false);
   }, []);
 
@@ -381,6 +386,7 @@ export default function Dashboard() {
     setDebtNotes('');
     setDebtDesc('');
     setDebtAmount('');
+    setEditingDebtId(null); // Clear editing state
     setDebtModalOpen(false);
   }, []);
 
@@ -391,16 +397,44 @@ export default function Dashboard() {
     setExpenseModalOpen(false);
   }, []);
 
-  const openSaleModal = () => {
-    if (businessMode === 'products' && products.length === 0) {
+  // --- UPDATED: Open Modals now handle editing ---
+  const openSaleModal = (tx?: Transaction) => {
+    if (businessMode === 'products' && products.length === 0 && !tx) {
       setInventoryPromptOpen(true);
       return;
     }
     resetSaleForm();
+    
+    if (tx) {
+      setEditingSaleId(tx.id);
+      setSaleName(tx.name);
+      setSaleMethod(tx.method);
+      setSaleAmount(tx.amount.toString());
+      if (tx.type === 'sale' && businessMode !== 'products') {
+         setSaleDesc(tx.items || '');
+      }
+    }
     setSaleModalOpen(true);
   };
 
-  const openDebtModal = () => { resetDebtForm(); setDebtModalOpen(true); };
+  const openDebtModal = (tx?: Transaction) => { 
+    resetDebtForm(); 
+    
+    if (tx) {
+      setEditingDebtId(tx.id);
+      setDebtName(tx.name);
+      setDebtPhone(tx.customerPhone || '');
+      setDebtEmail(tx.customerEmail || '');
+      setDebtDueDate(tx.dueDate || addDaysISO(7));
+      setDebtNotes(tx.notes || '');
+      setDebtAmount(tx.amount.toString());
+      if (tx.type === 'debt' && businessMode !== 'products') {
+        setDebtDesc(tx.items || '');
+      }
+    }
+    setDebtModalOpen(true); 
+  };
+
   const openExpenseModal = () => { resetExpenseForm(); setExpenseModalOpen(true); };
 
   const addSaleItem = () => {
@@ -431,41 +465,58 @@ export default function Dashboard() {
   const removeDebtItem = (id: string) =>
     setDebtItems((prev) => prev.filter((i) => i.productId !== id));
 
-  const saleTotal = businessMode === 'products'
+  const saleTotal = businessMode === 'products' && !editingSaleId
     ? saleItems.reduce((s, i) => s + i.subtotal, 0)
     : parseFloat(saleAmount) || 0;
-  const debtTotal = businessMode === 'products'
+  const debtTotal = businessMode === 'products' && !editingDebtId
     ? debtItems.reduce((s, i) => s + i.subtotal, 0)
     : parseFloat(debtAmount) || 0;
-  const saleItemsText = businessMode === 'products'
+  
+  const saleItemsText = businessMode === 'products' && !editingSaleId
     ? saleItems.map((i) => `${i.quantity}x ${i.productName}`).join(', ')
     : saleDesc.trim();
-  const debtItemsText = businessMode === 'products'
+  const debtItemsText = businessMode === 'products' && !editingDebtId
     ? debtItems.map((i) => `${i.quantity}x ${i.productName}`).join(', ')
     : debtDesc.trim();
 
+  // --- UPDATED: Submit Sales Handles Edit ---
   const submitSale = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !businessMode) return;
-    if (businessMode === 'products' && saleItems.length === 0) {
+    
+    if (businessMode === 'products' && !editingSaleId && saleItems.length === 0) {
       alert('Add at least one product.'); return;
     }
-    if (businessMode !== 'products' && (!saleDesc.trim() || !saleAmount || parseFloat(saleAmount) <= 0)) {
+    if ((businessMode !== 'products' || editingSaleId) && (!saleDesc.trim() || !saleAmount || parseFloat(saleAmount) <= 0) && editingSaleId) {
+       // If editing a product sale, allow just changing the name/amount without description
+    } else if (businessMode !== 'products' && (!saleDesc.trim() || !saleAmount || parseFloat(saleAmount) <= 0)) {
       alert('Enter a description and amount.'); return;
     }
+
     const now = new Date();
     try {
-      await createTransaction(user.uid, {
-        name: saleName,
-        items: saleItemsText,
-        amount: saleTotal,
-        method: saleMethod,
-        status: 'Completed',
-        type: 'sale',
-        date: now.toLocaleDateString('en-LS', { month: 'short', day: 'numeric', year: 'numeric' }),
-        time: now.toLocaleTimeString('en-LS', { hour: '2-digit', minute: '2-digit', hour12: false })
-      });
-      if (businessMode === 'products') await deductStock(saleItems);
+      if (editingSaleId) {
+        // UPDATE EXISTING SALE
+        await editTransaction(editingSaleId, {
+          name: saleName,
+          items: saleItemsText,
+          amount: saleTotal,
+          method: saleMethod,
+        } as Partial<Transaction>);
+      } else {
+        // CREATE NEW SALE
+        await createTransaction(user.uid, {
+          name: saleName,
+          items: saleItemsText,
+          amount: saleTotal,
+          method: saleMethod,
+          status: 'Completed',
+          type: 'sale',
+          date: now.toLocaleDateString('en-LS', { month: 'short', day: 'numeric', year: 'numeric' }),
+          time: now.toLocaleTimeString('en-LS', { hour: '2-digit', minute: '2-digit', hour12: false })
+        });
+        if (businessMode === 'products') await deductStock(saleItems);
+      }
       resetSaleForm();
     } catch (err) {
       console.error(err);
@@ -473,10 +524,12 @@ export default function Dashboard() {
     }
   };
 
+  // --- UPDATED: Submit Debts Handles Edit ---
   const submitDebt = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !businessMode) return;
-    if (businessMode === 'products' && debtItems.length === 0) {
+    
+    if (businessMode === 'products' && !editingDebtId && debtItems.length === 0) {
       alert('Add at least one product.'); return;
     }
     if (businessMode !== 'products' && (!debtDesc.trim() || !debtAmount || parseFloat(debtAmount) <= 0)) {
@@ -492,30 +545,33 @@ export default function Dashboard() {
     if (!debtDueDate) { alert('Set a due date.'); return; }
     const now = new Date();
     try {
-     // ✅ After:
-const txData: Omit<Transaction, 'id'> = {
-  name: debtName,
-  items: debtItemsText,
-  amount: debtTotal,
-  method: 'Cash',
-  status: 'Pending',
-  type: 'debt',
-  date: now.toLocaleDateString('en-LS', { month: 'short', day: 'numeric', year: 'numeric' }),
-  time: now.toLocaleTimeString('en-LS', { hour: '2-digit', minute: '2-digit', hour12: false }),
-  customerPhone: cleanPhone,
-  dueDate: debtDueDate,
-  amountPaid: 0,
-  remindersSent: 0
-};
+      const txData: Partial<Transaction> = {
+        name: debtName,
+        items: debtItemsText,
+        amount: debtTotal,
+        customerPhone: cleanPhone,
+        dueDate: debtDueDate,
+        customerEmail: debtEmail.trim() || undefined,
+        notes: debtNotes.trim() || undefined
+      };
 
-if (debtEmail.trim()) txData.customerEmail = debtEmail.trim();
-if (debtNotes.trim()) txData.notes = debtNotes.trim();
-
-      if (debtEmail.trim()) txData.customerEmail = debtEmail.trim();
-      if (debtNotes.trim()) txData.notes = debtNotes.trim();
-
-      await createTransaction(user.uid, txData);
-      if (businessMode === 'products') await deductStock(debtItems);
+      if (editingDebtId) {
+        // UPDATE EXISTING DEBT
+        await editTransaction(editingDebtId, txData);
+      } else {
+        // CREATE NEW DEBT
+        await createTransaction(user.uid, {
+          ...txData as Omit<Transaction, 'id'>,
+          method: 'Cash',
+          status: 'Pending',
+          type: 'debt',
+          date: now.toLocaleDateString('en-LS', { month: 'short', day: 'numeric', year: 'numeric' }),
+          time: now.toLocaleTimeString('en-LS', { hour: '2-digit', minute: '2-digit', hour12: false }),
+          amountPaid: 0,
+          remindersSent: 0
+        });
+        if (businessMode === 'products') await deductStock(debtItems);
+      }
       resetDebtForm();
     } catch (err) {
       console.error(err);
@@ -744,7 +800,10 @@ if (debtNotes.trim()) txData.notes = debtNotes.trim();
 
   return (
     <HelmetProvider>
-      <div className="flex flex-col md:flex-row min-h-screen bg-slate-50 text-slate-900 antialiased font-sans">
+      <div className="relative flex flex-col md:flex-row min-h-screen bg-slate-50 text-slate-900 antialiased font-sans overflow-hidden">
+        
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-gradient-to-br from-purple-200/40 via-blue-100/30 to-transparent blur-3xl -z-10 pointer-events-none rounded-full" />
+
         <SEO view={currentView} />
 
         {showOnboarding && (
@@ -764,7 +823,7 @@ if (debtNotes.trim()) txData.notes = debtNotes.trim();
           onLogout={handleLogout}
         />
 
-        <main className="flex-1 p-4 sm:p-6 md:p-12 pb-12 overflow-y-auto w-full max-w-7xl mx-auto">
+        <main className="flex-1 p-4 sm:p-6 md:p-12 pb-12 overflow-y-auto w-full max-w-7xl mx-auto z-10">
 
           <header className="mb-8 flex flex-row justify-end items-center gap-2 sticky top-0 bg-slate-50/85 backdrop-blur-md z-40 py-3 border-b border-slate-200/60 -mx-4 pl-16 pr-4 md:-mx-12 md:px-12 md:pl-12">
             <nav className="hidden md:flex gap-1 overflow-x-auto no-scrollbar md:order-2 bg-white border border-slate-200 rounded-2xl p-1 shadow-sm">
@@ -807,11 +866,14 @@ if (debtNotes.trim()) txData.notes = debtNotes.trim();
 
           {currentView === 'dashboard' && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-900 to-purple-900 p-6 md:p-10 shadow-xl">
+              
+              <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-900 to-purple-900 p-6 md:p-10 shadow-xl border border-slate-800">
+                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 mix-blend-overlay pointer-events-none" />
                 <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-purple-500/20 blur-3xl" />
+                
                 <div className="relative z-10 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8">
                   <div className="space-y-3">
-                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-white/90 border border-white/10">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-white/90 border border-white/10 backdrop-blur-sm">
                       <span className="relative flex h-1.5 w-1.5"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" /><span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400" /></span>
                       <span className="text-[10px] font-semibold uppercase tracking-wider">{localStorage.getItem('khotsopay_business') || 'SME Finance'} · {modeLabel(businessMode)}</span>
                     </div>
@@ -820,12 +882,12 @@ if (debtNotes.trim()) txData.notes = debtNotes.trim();
                   </div>
                   <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
                     {allowsSales(businessMode) && (
-                      <button onClick={openSaleModal} className="group flex items-center justify-center gap-2 bg-white text-slate-900 px-5 py-3.5 rounded-2xl font-semibold shadow-lg hover:shadow-xl hover:bg-slate-100 transition-all">
+                      <button onClick={() => openSaleModal()} className="group flex items-center justify-center gap-2 bg-white text-slate-900 px-5 py-3.5 rounded-2xl font-semibold shadow-lg hover:shadow-xl hover:bg-slate-100 transition-all">
                         <Plus size={18} className="group-hover:rotate-90 transition-transform" />
                         <span>Record Sale</span>
                       </button>
                     )}
-                    <button onClick={openDebtModal} className="group flex items-center justify-center gap-2 bg-amber-500 text-white px-5 py-3.5 rounded-2xl font-semibold shadow-lg hover:shadow-xl hover:bg-amber-600 transition-all">
+                    <button onClick={() => openDebtModal()} className="group flex items-center justify-center gap-2 bg-amber-500 text-white px-5 py-3.5 rounded-2xl font-semibold shadow-lg hover:shadow-xl hover:bg-amber-600 transition-all">
                       <HandCoins size={18} />
                       <span>Record Debt</span>
                     </button>
@@ -843,7 +905,7 @@ if (debtNotes.trim()) txData.notes = debtNotes.trim();
                     <p className="sf-eyebrow">Cash-up summary</p>
                     <p className="text-lg font-semibold mt-1">{dailyStats.date}</p>
                   </div>
-                  <button onClick={exportToPDF} className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs">
+                  <button onClick={exportToPDF} className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-colors">
                     <Download size={14} /> Export PDF
                   </button>
                 </div>
@@ -980,11 +1042,11 @@ if (debtNotes.trim()) txData.notes = debtNotes.trim();
                 <h3 className="font-bold text-lg mb-4">Quick Actions</h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {allowsSales(businessMode) && (
-                    <button onClick={openSaleModal} className="flex flex-col items-center gap-2 p-4 bg-purple-50 rounded-xl hover:bg-purple-100 transition"><Plus size={24} className="text-purple-600" /><span className="text-xs font-bold text-purple-700">Record Sale</span></button>
+                    <button onClick={() => openSaleModal()} className="flex flex-col items-center gap-2 p-4 bg-purple-50 rounded-xl hover:bg-purple-100 hover:-translate-y-1 transition-all duration-200"><Plus size={24} className="text-purple-600" /><span className="text-xs font-bold text-purple-700">Record Sale</span></button>
                   )}
-                  <button onClick={openDebtModal} className="flex flex-col items-center gap-2 p-4 bg-amber-50 rounded-xl hover:bg-amber-100 transition"><HandCoins size={24} className="text-amber-600" /><span className="text-xs font-bold text-amber-700">Record Debt</span></button>
-                  <button onClick={openExpenseModal} className="flex flex-col items-center gap-2 p-4 bg-red-50 rounded-xl hover:bg-red-100 transition"><Receipt size={24} className="text-red-600" /><span className="text-xs font-bold text-red-700">Record Expense</span></button>
-                  <button onClick={() => setAiDrawerOpen(true)} className="flex flex-col items-center gap-2 p-4 bg-purple-50 rounded-xl hover:bg-purple-100 transition"><Bot size={24} className="text-purple-600" /><span className="text-xs font-bold text-purple-700">AI Assistant</span></button>
+                  <button onClick={() => openDebtModal()} className="flex flex-col items-center gap-2 p-4 bg-amber-50 rounded-xl hover:bg-amber-100 hover:-translate-y-1 transition-all duration-200"><HandCoins size={24} className="text-amber-600" /><span className="text-xs font-bold text-amber-700">Record Debt</span></button>
+                  <button onClick={openExpenseModal} className="flex flex-col items-center gap-2 p-4 bg-red-50 rounded-xl hover:bg-red-100 hover:-translate-y-1 transition-all duration-200"><Receipt size={24} className="text-red-600" /><span className="text-xs font-bold text-red-700">Record Expense</span></button>
+                  <button onClick={() => setAiDrawerOpen(true)} className="flex flex-col items-center gap-2 p-4 bg-purple-50 rounded-xl hover:bg-purple-100 hover:-translate-y-1 transition-all duration-200"><Bot size={24} className="text-purple-600" /><span className="text-xs font-bold text-purple-700">AI Assistant</span></button>
                 </div>
               </div>
 
@@ -995,7 +1057,7 @@ if (debtNotes.trim()) txData.notes = debtNotes.trim();
                 </div>
                 {recentTransactions.length === 0 ? (
                   <div className="text-center py-10">
-                    <div className="mx-auto h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center mb-3"><History size={22} className="text-slate-400" /></div>
+                    <div className="mx-auto h-14 w-14 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 ring-4 ring-white shadow-sm flex items-center justify-center mb-3"><History size={24} className="text-slate-400" /></div>
                     <p className="font-semibold text-slate-700 text-sm">No activity yet</p>
                     <p className="text-slate-500 text-xs mt-1 mb-4">Record your first {allowsSales(businessMode) ? 'sale or debt' : 'debt'} to get started.</p>
                   </div>
@@ -1005,7 +1067,7 @@ if (debtNotes.trim()) txData.notes = debtNotes.trim();
                       const isDebt = tx.status === 'Pending';
                       const isExpense = tx.type === 'expense';
                       return (
-                        <div key={tx.id} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl">
+                        <div key={tx.id} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors">
                           <div className="flex items-center gap-3">
                             <div className={`p-2 rounded-lg ${isExpense ? 'bg-red-100' : isDebt ? 'bg-amber-100' : 'bg-emerald-100'}`}>
                               {isExpense ? <Receipt size={14} className="text-red-600" /> : isDebt ? <HandCoins size={14} className="text-amber-600" /> : <CheckCircle2 size={14} className="text-emerald-600" />}
@@ -1082,10 +1144,10 @@ if (debtNotes.trim()) txData.notes = debtNotes.trim();
                       <tbody className="divide-y divide-slate-100">
                         {filteredSales.length === 0 ? (
                           <tr><td colSpan={5} className="py-14 text-center">
-                            <div className="mx-auto h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center mb-3"><Banknote size={22} className="text-slate-400" /></div>
+                            <div className="mx-auto h-14 w-14 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 ring-4 ring-white shadow-sm flex items-center justify-center mb-3"><Banknote size={24} className="text-slate-400" /></div>
                             <p className="font-semibold text-slate-700 text-sm">No sales recorded</p>
                             <p className="text-slate-500 text-xs mt-1 mb-4">Record your first sale to see it here.</p>
-                            <button onClick={openSaleModal} className="px-4 py-2 rounded-xl bg-purple-600 text-white font-semibold text-xs hover:bg-purple-700">Record Sale</button>
+                            <button onClick={() => openSaleModal()} className="px-4 py-2 rounded-xl bg-purple-600 text-white font-semibold text-xs hover:bg-purple-700 transition-colors">Record Sale</button>
                           </td></tr>
                         ) : filteredSales.map((tx) => (
                           <tr key={tx.id} className="hover:bg-slate-50/80">
@@ -1105,9 +1167,14 @@ if (debtNotes.trim()) txData.notes = debtNotes.trim();
                               </span>
                             </td>
                             <td className="py-4 px-6 text-right">
-                              <button onClick={() => deleteTx(tx.id)} className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-red-600 rounded-lg" title="Delete">
-                                <Trash2 size={15} />
-                              </button>
+                              <div className="flex justify-end gap-1.5">
+                                <button onClick={() => openSaleModal(tx)} className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-purple-600 hover:border-purple-200 hover:bg-purple-50 transition-colors rounded-lg" title="Edit">
+                                  <Edit3 size={15} />
+                                </button>
+                                <button onClick={() => deleteTx(tx.id)} className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-colors rounded-lg" title="Delete">
+                                  <Trash2 size={15} />
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -1132,10 +1199,10 @@ if (debtNotes.trim()) txData.notes = debtNotes.trim();
                       <tbody className="divide-y divide-slate-100">
                         {filteredDebts.length === 0 ? (
                           <tr><td colSpan={6} className="py-14 text-center">
-                            <div className="mx-auto h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center mb-3"><HandCoins size={22} className="text-slate-400" /></div>
+                            <div className="mx-auto h-14 w-14 rounded-full bg-gradient-to-br from-amber-50 to-amber-100 ring-4 ring-white shadow-sm flex items-center justify-center mb-3"><HandCoins size={24} className="text-amber-400" /></div>
                             <p className="font-semibold text-slate-700 text-sm">No debts recorded</p>
                             <p className="text-slate-500 text-xs mt-1 mb-4">Record a debt to track who owes you.</p>
-                            <button onClick={openDebtModal} className="px-4 py-2 rounded-xl bg-amber-500 text-white font-semibold text-xs hover:bg-amber-600">Record Debt</button>
+                            <button onClick={() => openDebtModal()} className="px-4 py-2 rounded-xl bg-amber-500 text-white font-semibold text-xs hover:bg-amber-600 transition-colors">Record Debt</button>
                           </td></tr>
                         ) : filteredDebts.map((tx) => {
                           const remaining = tx.amount - (tx.amountPaid ?? 0);
@@ -1173,16 +1240,19 @@ if (debtNotes.trim()) txData.notes = debtNotes.trim();
                                 <div className="flex justify-end gap-1.5 flex-wrap">
                                   {tx.customerPhone && (
                                     <>
-                                      <button onClick={() => sendReminder(tx, 'whatsapp')} className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100" title="WhatsApp"><MessageCircle size={15} /></button>
-                                      <button onClick={() => sendReminder(tx, 'sms')} className="p-2 bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100" title="SMS"><MessageSquare size={15} /></button>
+                                      <button onClick={() => sendReminder(tx, 'whatsapp')} className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors" title="WhatsApp"><MessageCircle size={15} /></button>
+                                      <button onClick={() => sendReminder(tx, 'sms')} className="p-2 bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 transition-colors" title="SMS"><MessageSquare size={15} /></button>
                                     </>
                                   )}
                                   {tx.customerEmail && (
-                                    <button onClick={() => sendReminder(tx, 'email')} className="p-2 bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100" title="Email"><Mail size={15} /></button>
+                                    <button onClick={() => sendReminder(tx, 'email')} className="p-2 bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 transition-colors" title="Email"><Mail size={15} /></button>
                                   )}
-                                  <button onClick={() => { setPaymentModalId(tx.id); setPaymentAmount(''); }} className="p-2 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-100" title="Record payment"><Banknote size={15} /></button>
-                                  <button onClick={() => markPaid(tx.id)} className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100" title="Mark fully paid"><CheckCircle2 size={15} /></button>
-                                  <button onClick={() => deleteTx(tx.id)} className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-red-600 rounded-lg" title="Delete"><Trash2 size={15} /></button>
+                                  <button onClick={() => { setPaymentModalId(tx.id); setPaymentAmount(''); }} className="p-2 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-100 transition-colors" title="Record payment"><Banknote size={15} /></button>
+                                  <button onClick={() => markPaid(tx.id)} className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors" title="Mark fully paid"><CheckCircle2 size={15} /></button>
+                                  <button onClick={() => openDebtModal(tx)} className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-amber-600 hover:border-amber-200 hover:bg-amber-50 transition-colors rounded-lg" title="Edit">
+                                    <Edit3 size={15} />
+                                  </button>
+                                  <button onClick={() => deleteTx(tx.id)} className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-colors rounded-lg" title="Delete"><Trash2 size={15} /></button>
                                 </div>
                               </td>
                             </tr>
@@ -1207,10 +1277,10 @@ if (debtNotes.trim()) txData.notes = debtNotes.trim();
                       <tbody className="divide-y divide-slate-100">
                         {filteredExpenses.length === 0 ? (
                           <tr><td colSpan={4} className="py-14 text-center">
-                            <div className="mx-auto h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center mb-3"><Receipt size={22} className="text-slate-400" /></div>
+                            <div className="mx-auto h-14 w-14 rounded-full bg-gradient-to-br from-red-50 to-red-100 ring-4 ring-white shadow-sm flex items-center justify-center mb-3"><Receipt size={24} className="text-red-400" /></div>
                             <p className="font-semibold text-slate-700 text-sm">No expenses recorded</p>
                             <p className="text-slate-500 text-xs mt-1 mb-4">Record your first expense to see it here.</p>
-                            <button onClick={openExpenseModal} className="px-4 py-2 rounded-xl bg-red-600 text-white font-semibold text-xs hover:bg-red-700">Record Expense</button>
+                            <button onClick={openExpenseModal} className="px-4 py-2 rounded-xl bg-red-600 text-white font-semibold text-xs hover:bg-red-700 transition-colors">Record Expense</button>
                           </td></tr>
                         ) : filteredExpenses.map((tx) => (
                           <tr key={tx.id} className="hover:bg-slate-50/80">
@@ -1225,7 +1295,7 @@ if (debtNotes.trim()) txData.notes = debtNotes.trim();
                             </td>
                             <td className="py-4 px-6 text-right font-bold tabular-nums text-red-600">−{formatCurrency(tx.amount)}</td>
                             <td className="py-4 px-6 text-right">
-                              <button onClick={() => deleteTx(tx.id)} className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-red-600 rounded-lg" title="Delete">
+                              <button onClick={() => deleteTx(tx.id)} className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-colors rounded-lg" title="Delete">
                                 <Trash2 size={15} />
                               </button>
                             </td>
@@ -1246,8 +1316,8 @@ if (debtNotes.trim()) txData.notes = debtNotes.trim();
                 <div className="flex items-center gap-3 mb-6">
                   <div className="p-2 bg-purple-100 rounded-xl"><Banknote size={22} className="text-purple-600" /></div>
                   <div>
-                    <h2 className="text-2xl font-bold">Record Sale</h2>
-                    <p className="text-xs text-slate-500">Payment received now</p>
+                    <h2 className="text-2xl font-bold">{editingSaleId ? 'Edit Sale' : 'Record Sale'}</h2>
+                    <p className="text-xs text-slate-500">{editingSaleId ? 'Update existing transaction' : 'Payment received now'}</p>
                   </div>
                 </div>
                 <form onSubmit={submitSale} className="space-y-4">
@@ -1256,7 +1326,7 @@ if (debtNotes.trim()) txData.notes = debtNotes.trim();
                     <input required autoFocus value={saleName} onChange={(e) => setSaleName(e.target.value)} placeholder="Who bought?" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-purple-300 focus:ring-4 focus:ring-purple-100 outline-none font-semibold" />
                   </div>
 
-                  {businessMode === 'products' ? (
+                  {businessMode === 'products' && !editingSaleId ? (
                     <>
                       <div className="bg-slate-50 rounded-2xl p-4 space-y-3 border border-slate-100">
                         <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest">Add Product</label>
@@ -1287,7 +1357,7 @@ if (debtNotes.trim()) txData.notes = debtNotes.trim();
                   ) : (
                     <>
                       <div>
-                        <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">What did you do?</label>
+                        <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">{editingSaleId ? 'Description / Items' : 'What did you do?'}</label>
                         <input required value={saleDesc} onChange={(e) => setSaleDesc(e.target.value)} placeholder="E.g., Haircut + wash, Laundry 5 shirts" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-purple-300 focus:ring-4 focus:ring-purple-100 outline-none font-semibold" />
                       </div>
                       <div>
@@ -1310,15 +1380,15 @@ if (debtNotes.trim()) txData.notes = debtNotes.trim();
                     ))}
                   </div>
 
-                  {businessMode === 'products' && saleItems.length === 0 && (
+                  {businessMode === 'products' && saleItems.length === 0 && !editingSaleId && (
                     <p className="text-center text-xs font-semibold text-amber-600 -mt-2">Add at least one product before confirming.</p>
                   )}
                   <button
                     type="submit"
-                    disabled={businessMode === 'products' && saleItems.length === 0}
+                    disabled={businessMode === 'products' && saleItems.length === 0 && !editingSaleId}
                     className="w-full bg-purple-600 text-white py-4 rounded-2xl font-bold hover:bg-purple-700 flex items-center justify-center gap-2 disabled:bg-slate-300 disabled:cursor-not-allowed disabled:hover:bg-slate-300"
                   >
-                    <CheckCircle2 size={18} /> Confirm Sale
+                    <CheckCircle2 size={18} /> {editingSaleId ? 'Save Changes' : 'Confirm Sale'}
                   </button>
                 </form>
               </div>
@@ -1332,8 +1402,8 @@ if (debtNotes.trim()) txData.notes = debtNotes.trim();
                 <div className="flex items-center gap-3 mb-6">
                   <div className="p-2 bg-amber-100 rounded-xl"><HandCoins size={22} className="text-amber-600" /></div>
                   <div>
-                    <h2 className="text-2xl font-bold">Record Debt</h2>
-                    <p className="text-xs text-slate-500">Customer will pay later</p>
+                    <h2 className="text-2xl font-bold">{editingDebtId ? 'Edit Debt' : 'Record Debt'}</h2>
+                    <p className="text-xs text-slate-500">{editingDebtId ? 'Update existing debt record' : 'Customer will pay later'}</p>
                   </div>
                 </div>
                 <form onSubmit={submitDebt} className="space-y-4">
@@ -1365,7 +1435,7 @@ if (debtNotes.trim()) txData.notes = debtNotes.trim();
                     <input required type="date" value={debtDueDate} onChange={(e) => setDebtDueDate(e.target.value)} className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-amber-300 focus:ring-4 focus:ring-amber-100 outline-none font-semibold" />
                   </div>
 
-                  {businessMode === 'products' ? (
+                  {businessMode === 'products' && !editingDebtId ? (
                     <>
                       <div className="bg-amber-50 rounded-2xl p-4 space-y-3 border border-amber-100">
                         <label className="text-[10px] font-bold uppercase text-amber-700 tracking-widest">Products Owed</label>
@@ -1396,7 +1466,7 @@ if (debtNotes.trim()) txData.notes = debtNotes.trim();
                   ) : (
                     <>
                       <div>
-                        <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">What do they owe you for?</label>
+                        <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">{editingDebtId ? 'Description / Items' : 'What do they owe you for?'}</label>
                         <input required value={debtDesc} onChange={(e) => setDebtDesc(e.target.value)} placeholder="E.g., Haircut, Laundry, Loan" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-amber-300 focus:ring-4 focus:ring-amber-100 outline-none font-semibold" />
                       </div>
                       <div>
@@ -1411,15 +1481,15 @@ if (debtNotes.trim()) txData.notes = debtNotes.trim();
                     <textarea value={debtNotes} onChange={(e) => setDebtNotes(e.target.value)} rows={2} placeholder="E.g. promised to pay Friday" className="w-full mt-1 p-3 bg-slate-50 rounded-xl border border-slate-200 focus:border-amber-300 focus:ring-4 focus:ring-amber-100 outline-none text-sm resize-none" />
                   </div>
 
-                  {businessMode === 'products' && debtItems.length === 0 && (
+                  {businessMode === 'products' && debtItems.length === 0 && !editingDebtId && (
                     <p className="text-center text-xs font-semibold text-amber-600 -mt-2">Add at least one product before saving.</p>
                   )}
                   <button
                     type="submit"
-                    disabled={businessMode === 'products' && debtItems.length === 0}
+                    disabled={businessMode === 'products' && debtItems.length === 0 && !editingDebtId}
                     className="w-full bg-amber-500 text-white py-4 rounded-2xl font-bold hover:bg-amber-600 flex items-center justify-center gap-2 disabled:bg-slate-300 disabled:cursor-not-allowed disabled:hover:bg-slate-300"
                   >
-                    <HandCoins size={18} /> Save Debt
+                    <HandCoins size={18} /> {editingDebtId ? 'Save Changes' : 'Save Debt'}
                   </button>
                 </form>
               </div>
@@ -1523,7 +1593,7 @@ if (debtNotes.trim()) txData.notes = debtNotes.trim();
                   <div className="flex gap-2 mt-4">
                     <button onClick={() => setPaymentAmount(remaining.toString())} className="px-3 py-2 text-xs font-semibold bg-slate-100 rounded-lg hover:bg-slate-200">Full: {formatCurrency(remaining)}</button>
                   </div>
-                  <button onClick={() => recordPayment(tx)} className="w-full mt-4 bg-purple-600 text-white py-3 rounded-xl font-bold hover:bg-purple-700">Record Payment</button>
+                  <button onClick={() => recordPayment(tx)} className="w-full mt-4 bg-purple-600 text-white py-3 rounded-xl font-bold hover:bg-purple-700 transition-colors">Record Payment</button>
                 </div>
               </div>
             );
@@ -1540,7 +1610,7 @@ if (debtNotes.trim()) txData.notes = debtNotes.trim();
           )}
 
           {currentView === 'analytics' && (
-            <div className="space-y-6">
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
               <h2 className="sf-h1">Analytics Dashboard</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="sf-card p-6">
@@ -1566,7 +1636,7 @@ if (debtNotes.trim()) txData.notes = debtNotes.trim();
                 <h3 className="font-bold mb-4 flex items-center gap-2"><Package size={20} className="text-purple-600" /> {businessMode === 'products' ? 'Top Selling Products' : 'Top Services'}</h3>
                 {productAnalytics.topProducts.length === 0 ? (
                   <div className="text-center py-8">
-                    <div className="mx-auto h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center mb-3"><Package size={22} className="text-slate-400" /></div>
+                    <div className="mx-auto h-14 w-14 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 ring-4 ring-white shadow-sm flex items-center justify-center mb-3"><Package size={24} className="text-slate-400" /></div>
                     <p className="font-semibold text-slate-700 text-sm">No data yet</p>
                   </div>
                 ) : (
@@ -1587,12 +1657,15 @@ if (debtNotes.trim()) txData.notes = debtNotes.trim();
           )}
 
           {currentView === 'wallet' && (
-            <div className="space-y-6">
-              <div className="bg-gradient-to-br from-purple-600 to-purple-800 rounded-3xl p-8 text-white shadow-lg">
-                <p className="text-sm opacity-80 mb-2">Available Balance</p>
-                <p className="text-4xl md:text-5xl font-bold tabular-nums">{formatCurrency(stats.totalRevenue - stats.totalPending - totalExpenses)}</p>
-                <p className="text-xs opacity-70 mt-2">Pending (debts): {formatCurrency(stats.totalPending)}</p>
-                <p className="text-xs opacity-70 mt-1">Total expenses: {formatCurrency(totalExpenses)}</p>
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="relative overflow-hidden bg-gradient-to-br from-purple-600 to-purple-800 rounded-3xl p-8 text-white shadow-lg">
+                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 mix-blend-overlay pointer-events-none" />
+                <div className="relative z-10">
+                  <p className="text-sm opacity-80 mb-2">Available Balance</p>
+                  <p className="text-4xl md:text-5xl font-bold tabular-nums">{formatCurrency(stats.totalRevenue - stats.totalPending - totalExpenses)}</p>
+                  <p className="text-xs opacity-70 mt-2">Pending (debts): {formatCurrency(stats.totalPending)}</p>
+                  <p className="text-xs opacity-70 mt-1">Total expenses: {formatCurrency(totalExpenses)}</p>
+                </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="sf-card p-4"><TrendingUp className="text-emerald-600 mb-2" size={24} /><p className="text-2xl font-bold tabular-nums">{formatCurrency(dailyStats.revenue)}</p><p className="text-xs text-slate-500">Today's revenue</p></div>
@@ -1603,14 +1676,14 @@ if (debtNotes.trim()) txData.notes = debtNotes.trim();
           )}
 
           {currentView === 'profile' && (
-            <div className="space-y-6">
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="sf-card p-8">
                 <div className="flex flex-col md:flex-row items-center gap-6">
                   <div className="w-24 h-24 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg"><User size={48} className="text-white" /></div>
                   <div className="text-center md:text-left flex-1">
                     <h2 className="text-2xl font-bold">{profileForm.businessName || 'Merchant User'}</h2>
                     <p className="text-slate-500">{localStorage.getItem('khotsopay_user_email') || 'merchant@sme.ls'}</p>
-                    <div className="flex flex-wrap gap-2 mt-3">
+                    <div className="flex flex-wrap gap-2 mt-3 justify-center md:justify-start">
                       <span className="inline-flex items-center gap-1 px-3 py-1 bg-purple-100 text-purple-700 text-xs font-bold rounded-full"><ShieldCheck size={12} /> {modeLabel(businessMode)} business</span>
                       <span className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-100 text-emerald-700 text-xs font-bold rounded-full"><CheckCircle2 size={12} /> Active</span>
                     </div>
@@ -1629,7 +1702,7 @@ if (debtNotes.trim()) txData.notes = debtNotes.trim();
                       setBusinessMode(null);
                     }
                   }}
-                  className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-200"
+                  className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-200 transition-colors"
                 >
                   Change Business Mode
                 </button>
@@ -1638,7 +1711,7 @@ if (debtNotes.trim()) txData.notes = debtNotes.trim();
               <div className="sf-card p-6">
                 <div className="flex justify-between items-center mb-6">
                   <h3 className="text-xl font-bold">Personal Information</h3>
-                  <button onClick={() => setIsEditing(!isEditing)} className="flex items-center gap-2 bg-purple-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-purple-700">
+                  <button onClick={() => setIsEditing(!isEditing)} className="flex items-center gap-2 bg-purple-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-purple-700 transition-colors">
                     {isEditing ? <X size={16} /> : <Edit3 size={16} />}{isEditing ? 'Cancel' : 'Edit'}
                   </button>
                 </div>
@@ -1663,8 +1736,8 @@ if (debtNotes.trim()) txData.notes = debtNotes.trim();
                 </div>
                 {isEditing && (
                   <div className="flex gap-3 mt-6 pt-4 border-t">
-                    <button onClick={handleSaveProfile} className="flex-1 bg-purple-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2"><Save size={18} /> Save</button>
-                    <button onClick={() => { setIsEditing(false); loadProfileData(); }} className="flex-1 bg-slate-100 text-slate-600 py-3 rounded-xl font-bold">Cancel</button>
+                    <button onClick={handleSaveProfile} className="flex-1 bg-purple-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-purple-700 transition-colors"><Save size={18} /> Save</button>
+                    <button onClick={() => { setIsEditing(false); loadProfileData(); }} className="flex-1 bg-slate-100 text-slate-600 py-3 rounded-xl font-bold hover:bg-slate-200 transition-colors">Cancel</button>
                   </div>
                 )}
               </div>
@@ -1672,7 +1745,7 @@ if (debtNotes.trim()) txData.notes = debtNotes.trim();
           )}
 
           {currentView === 'settings' && (
-            <div className="space-y-6">
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
               <h2 className="sf-h1">Settings</h2>
               <div className="sf-card p-6">
                 <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Bell size={20} className="text-purple-600" /> Notifications</h3>
@@ -1683,7 +1756,7 @@ if (debtNotes.trim()) txData.notes = debtNotes.trim();
                         <p className="font-medium">{key === 'emailAlerts' ? 'Email Alerts' : 'Daily Report'}</p>
                         <p className="text-xs text-slate-500">{key === 'emailAlerts' ? 'Receive transaction alerts' : 'Receive daily summary'}</p>
                       </div>
-                      <button onClick={() => { const v = !notifications[key]; setNotifications({ ...notifications, [key]: v }); localStorage.setItem(`khotsopay_${key}`, String(v)); }} className={`w-12 h-6 rounded-full relative ${notifications[key] ? 'bg-purple-600' : 'bg-slate-300'}`}>
+                      <button onClick={() => { const v = !notifications[key]; setNotifications({ ...notifications, [key]: v }); localStorage.setItem(`khotsopay_${key}`, String(v)); }} className={`w-12 h-6 rounded-full relative transition-colors ${notifications[key] ? 'bg-purple-600' : 'bg-slate-300'}`}>
                         <span className={`absolute top-0.5 h-5 w-5 bg-white rounded-full transition-all ${notifications[key] ? 'left-6' : 'left-0.5'}`} />
                       </button>
                     </label>
@@ -1710,7 +1783,7 @@ if (debtNotes.trim()) txData.notes = debtNotes.trim();
                       localStorage.removeItem('khotsopay_onboarded');
                       setShowOnboarding(true);
                     }}
-                    className="w-full p-3 bg-slate-50 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-100 text-left"
+                    className="w-full p-3 bg-slate-50 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-100 text-left transition-colors"
                   >
                     Show tour again
                   </button>
@@ -1728,13 +1801,13 @@ if (debtNotes.trim()) txData.notes = debtNotes.trim();
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <button
                     onClick={() => setLegalGuideOpen(true)}
-                    className="py-3 bg-slate-100 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-200 flex items-center justify-center gap-2"
+                    className="py-3 bg-slate-100 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-200 flex items-center justify-center gap-2 transition-colors"
                   >
                     <Scale size={16} /> Open Legal Guide
                   </button>
                   <button
                     onClick={() => setHelpCenterOpen(true)}
-                    className="py-3 bg-purple-50 text-purple-700 rounded-xl font-bold text-sm hover:bg-purple-100 flex items-center justify-center gap-2"
+                    className="py-3 bg-purple-50 text-purple-700 rounded-xl font-bold text-sm hover:bg-purple-100 flex items-center justify-center gap-2 transition-colors"
                   >
                     <BookOpen size={16} /> Open Help Center
                   </button>
@@ -1744,8 +1817,8 @@ if (debtNotes.trim()) txData.notes = debtNotes.trim();
               <div className="sf-card p-6">
                 <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><ShieldCheck size={20} className="text-purple-600" /> Data Management</h3>
                 <div className="space-y-3">
-                  <button onClick={exportToExcel} className="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 flex items-center justify-center gap-2"><FileText size={16} /> Export to Excel</button>
-                  <button onClick={exportToCSV} className="w-full py-3 bg-slate-100 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-200 flex items-center justify-center gap-2"><Download size={16} /> Export to CSV</button>
+                  <button onClick={exportToExcel} className="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 flex items-center justify-center gap-2 transition-colors"><FileText size={16} /> Export to Excel</button>
+                  <button onClick={exportToCSV} className="w-full py-3 bg-slate-100 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-200 flex items-center justify-center gap-2 transition-colors"><Download size={16} /> Export to CSV</button>
                 </div>
               </div>
             </div>
@@ -1865,12 +1938,12 @@ if (debtNotes.trim()) txData.notes = debtNotes.trim();
                 <button
                   onClick={() => setAiDrawerOpen(false)}
                   aria-label="Close AI Assistant"
-                  className="p-2 rounded-lg text-slate-400 hover:text-slate-900 hover:bg-slate-100"
+                  className="p-2 rounded-lg text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-colors"
                 >
                   <X size={20} />
                 </button>
               </div>
-              <div className="flex-1 overflow-y-auto p-4">
+              <div className="flex-1 overflow-y-auto p-4 bg-white/50">
                 <AIAssistant
                   businessName={localStorage.getItem('khotsopay_business') || 'SME'}
                   transactions={allTransactions}

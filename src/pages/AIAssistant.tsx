@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Bot, Send, WifiOff, Sparkles, AlertCircle, Loader2,
-  Copy, Check, RotateCcw, User, Trash2
+  Copy, Check, RotateCcw, User, Trash2, ShieldAlert
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import { askGemini, type BusinessContext } from '../services/gemini';
 import type { Transaction } from '../types/schema';
 import type { Product } from '../types/product';
@@ -121,13 +122,12 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
     } catch {}
   }, [messages, storageKey]);
 
-  const buildContext = (): BusinessContext => {
+  const buildContext = (): BusinessContext & { anomalies: string[] } => {
     const todayStr = new Date().toLocaleDateString('en-LS', {
       month: 'short', day: 'numeric', year: 'numeric'
     });
     const todayTx = transactions.filter(t => t.date === todayStr);
 
-    // Only count SALES as revenue (not expenses, not pending)
     const salesOnly = transactions.filter(t => t.status === 'Completed' && t.type !== 'expense');
     const expensesOnly = transactions.filter(t => t.type === 'expense');
 
@@ -142,13 +142,11 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
       .filter(t => t.status === 'Pending')
       .reduce((s, t) => s + t.amount, 0);
 
-    // NEW: expenses
     const totalExpenses = expensesOnly.reduce((s, t) => s + t.amount, 0);
     const todayExpenses = todayTx
       .filter(t => t.type === 'expense')
       .reduce((s, t) => s + t.amount, 0);
 
-    // Build top products from sales only (not expenses)
     const salesMap = new Map<string, { sales: number; revenue: number }>();
     salesOnly
       .filter(t => t.items)
@@ -177,6 +175,25 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
       status: t.type === 'expense' ? 'Expense' : t.status === 'Completed' ? 'Paid' : 'Owed'
     }));
 
+    // --- ANOMALY DETECTION ---
+    const anomalies: string[] = [];
+    
+    // 1. Selling at a loss
+    const lossMakingProducts = products.filter(p => p.sellingPrice && p.buyingPrice && p.sellingPrice < p.buyingPrice);
+    if (lossMakingProducts.length > 0) {
+      anomalies.push(`Selling at a loss: ${lossMakingProducts.map(p => p.name).join(', ')}`);
+    }
+
+    // 2. Expenses exceeding revenue
+    if (totalExpenses > totalRevenue && totalExpenses > 0) {
+      anomalies.push(`Total expenses (M${totalExpenses.toFixed(2)}) exceed total revenue (M${totalRevenue.toFixed(2)}).`);
+    }
+
+    // 3. High debt ratio
+    if (totalPending > (totalRevenue * 0.5) && totalPending > 0) {
+      anomalies.push(`High outstanding debt: Customers owe M${totalPending.toFixed(2)}, which is over 50% of your total revenue.`);
+    }
+
     return {
       businessName,
       totalRevenue,
@@ -190,7 +207,8 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
       topProducts,
       recentTransactions,
       totalExpenses,
-      todayExpenses
+      todayExpenses,
+      anomalies
     };
   };
 
@@ -329,6 +347,9 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
   }, [messages]);
 
   const hasUserMessages = messages.some(m => m.role === 'user');
+  
+  // Calculate anomalies for the UI banner
+  const currentAnomalies = buildContext().anomalies;
 
   return (
     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-3xl mx-auto">
@@ -360,6 +381,24 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
           </span>
         </div>
       </div>
+
+      {/* Anomaly Warning Banner */}
+      {currentAnomalies.length > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex items-start gap-3 animate-pulse">
+          <ShieldAlert className="text-red-600 flex-shrink-0 mt-0.5" size={20} />
+          <div>
+            <p className="font-bold text-red-800 text-sm">Unusual Activity Detected</p>
+            <ul className="text-red-700 text-xs mt-1 list-disc pl-4 space-y-1">
+              {currentAnomalies.map((anomaly, idx) => (
+                <li key={idx}>{anomaly}</li>
+              ))}
+            </ul>
+            <p className="text-red-600 text-[10px] mt-2 font-medium">
+              Ask the AI below: "Explain the unusual activity in my business."
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Value banner */}
       <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 text-sm text-purple-800">
@@ -408,12 +447,29 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
                   <div
                     className={`rounded-2xl px-4 py-3 ${
                       message.role === 'user'
-                        ? 'bg-purple-600 text-white shadow-sm'
+                        ? 'bg-slate-100 border border-slate-200 text-slate-800 shadow-sm'
                         : 'bg-white border border-slate-200 text-slate-800 shadow-sm'
                     }`}
                   >
-                    <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.text}</p>
-                    <p className={`text-[10px] mt-2 ${message.role === 'user' ? 'text-purple-200' : 'text-slate-400'}`}>
+                    {message.role === 'ai' ? (
+                      <div className="text-sm leading-relaxed space-y-2">
+                        <ReactMarkdown
+                          components={{
+                            strong: ({node: _, ...props}) => <span className="font-bold text-slate-900" {...props} />,
+                            ul: ({node: _, ...props}) => <ul className="list-disc pl-5 space-y-1 my-2" {...props} />,
+                            ol: ({node: _, ...props}) => <ol className="list-decimal pl-5 space-y-1 my-2" {...props} />,
+                            li: ({node: _, ...props}) => <li className="text-slate-700" {...props} />,
+                            p: ({node: _, ...props}) => <p className="mb-2 last:mb-0" {...props} />
+                          }}
+                        >
+                          {message.text}
+                        </ReactMarkdown>
+                      </div>
+                    ) : (
+                      <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.text}</p>
+                    )}
+                    
+                    <p className={`text-[10px] mt-2 ${message.role === 'user' ? 'text-slate-500' : 'text-slate-400'}`}>
                       {message.timestamp}
                     </p>
                   </div>

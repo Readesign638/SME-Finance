@@ -29,9 +29,10 @@ export interface BusinessContext {
     amount: number;
     status: string;
   }[];
-  // ---- NEW: expense tracking ----
   totalExpenses: number;
   todayExpenses: number;
+  // NEW: Added to match the frontend anomaly detection
+  anomalies: string[];
 }
 
 export const buildFinancialContext = (context: BusinessContext): string => {
@@ -82,6 +83,15 @@ export const buildFinancialContext = (context: BusinessContext): string => {
     });
   }
 
+  // NEW: Pass the anomalies to the AI
+  if (context.anomalies && context.anomalies.length > 0) {
+    lines.push('');
+    lines.push('=== CRITICAL ANOMALIES (UNUSUAL ACTIVITY DETECTED) ===');
+    context.anomalies.forEach((a) => {
+      lines.push(`  🔴 WARNING: ${a}`);
+    });
+  }
+
   return lines.join('\n');
 };
 
@@ -98,28 +108,32 @@ export const askGemini = async (
 
   const systemPrompt =
     language === 'st'
-      ? `Uena ke mothusi oa lichelete bakeng sa SME e Lesotho.
+      ? `Uena ke moeletsi oa lichelete ea nang le boiphihlelo bakeng sa SME e Lesotho.
 
 **HLOKOMELA: Araba ka SESOTHO FEELA. Se sebelise Senyesemane ho hang.**
+**SEBEDISA MARKDOWN:** Kaho e hlophisitsoeng hantle. Sebelisa **mongolo o motenya** bakeng sa chelete (mohlala, **M 500.00**). Sebelisa lintlha (bullet points) ha u thathamisa lintho tse fetang e le 'ngoe.
 
 Lintlha tsa khoebo:
 ${financialContext}
 
-Bua ka mokhoa o bonolo le o khutšoanyane.
-- Ha u botsa ka pholokelo (profit), sebelisa Net Profit = Revenue − Expenses.
-- Ha u botsa ka litšenyehelo (expenses), sebelisa Total Expenses kapa Today's Expenses.
-- U se ke ua fana ka likeletso tsa lichelete tse tebileng — u fana ka tlhahisoleseding feela.`
-      : `You are a financial assistant for an SME in Lesotho.
+Litaelo tsa bohlokoa:
+1. Ha u botsa ka pholokelo (profit), sebelisa Net Profit = Revenue − Expenses.
+2. Ha u botsa ka litšenyehelo (expenses), sebelisa Total Expenses kapa Today's Expenses.
+3. **TLHOKOMELO E KHOLO:** Haeba ho na le "CRITICAL ANOMALIES" ho data e ka holimo, qala karabo ea hau ka ho hlokomelisa mosebelisi ka bothata bona. Sebelisa letshwao lena: 🔴.
+4. U se ke ua fana ka likeletso tsa lichelete tse tebileng — u fana ka tlhahisoleseding feela.`
+      : `You are an expert financial advisor for an SME in Lesotho.
 
 **IMPORTANT: Answer in ENGLISH ONLY. Do not use Sesotho.**
+**USE MARKDOWN:** Format your answers beautifully. **Bold** all currency amounts (e.g., **M 500.00**). Use bullet points when listing multiple items.
 
 Business data:
 ${financialContext}
 
-Speak in simple, short terms.
-- When asked about profit, use Net Profit = Revenue − Expenses.
-- When asked about spending, use Total Expenses or Today's Expenses.
-- Do not give formal financial advice — only provide insights based on data.`;
+Critical instructions:
+1. When asked about profit, use Net Profit = Revenue − Expenses.
+2. When asked about spending, use Total Expenses or Today's Expenses.
+3. **CRITICAL ALERT:** If there are "CRITICAL ANOMALIES" in the data above, you MUST begin your response by warning the user about these unusual doings. Use a red circle emoji (🔴) for warnings.
+4. Do not give formal financial advice — only provide insights based on the data.`;
 
   try {
     const completion = await groq.chat.completions.create({
@@ -128,6 +142,7 @@ Speak in simple, short terms.
         { role: 'user', content: userQuestion },
       ],
       model: 'openai/gpt-oss-120b',
+      temperature: 0.3, // Lower temperature makes the AI more focused and professional
     });
 
     return completion.choices[0]?.message?.content || 'No response received.';
