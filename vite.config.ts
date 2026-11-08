@@ -14,7 +14,7 @@ export default defineConfig({
         name: 'SME Finance',
         short_name: 'SME Finance',
         description: 'Ledger for Lesotho Merchants',
-        theme_color: '#7c3aed', // Changed to match your purple logo
+        theme_color: '#0d9488', // ✅ Changed from purple to Teal
         background_color: '#f8fafc',
         display: 'standalone',
         icons: [
@@ -28,7 +28,21 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,jpg,jpeg,webp,woff,woff2}'],
+        // ✅ FIX: Allow files up to 5 MB to be precached (default is 2 MB)
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
       }
     })
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        // ✅ FIX: Split vendor libraries into smaller files
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            return id.toString().split('node_modules/')[1].split('/')[0].toString();
+          }
+        },
+      },
+    },
+  },
 })
