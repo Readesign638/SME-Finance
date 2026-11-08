@@ -200,7 +200,7 @@ const Inventory: React.FC<InventoryProps> = ({ userId }) => {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="w-12 h-12 border-4 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
+        <div className="w-12 h-12 border-4 border-teal-600 border-t-transparent rounded-full animate-spin"></div>
       </div>
     );
   }
@@ -220,7 +220,7 @@ const Inventory: React.FC<InventoryProps> = ({ userId }) => {
         </div>
         <button
           onClick={handleAddNew}
-          className="flex items-center gap-3 bg-purple-600 text-white px-6 py-4 rounded-2xl font-bold text-sm uppercase tracking-wider shadow-lg shadow-purple-200 hover:bg-purple-700 transition active:scale-95"
+          className="flex items-center gap-3 bg-teal-600 text-white px-6 py-4 rounded-2xl font-bold text-sm uppercase tracking-wider shadow-lg shadow-teal-200 hover:bg-teal-700 transition active:scale-95"
         >
           <Plus size={20} strokeWidth={3} />
           Add Product
@@ -230,7 +230,7 @@ const Inventory: React.FC<InventoryProps> = ({ userId }) => {
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
         <div className="bg-white p-4 md:p-5 rounded-2xl shadow-sm border border-slate-100">
-          <Package className="text-purple-600 mb-2" size={22} />
+          <Package className="text-teal-600 mb-2" size={22} />
           <p className="text-2xl font-bold tabular-nums">{stats.totalProducts}</p>
           <p className="text-xs text-slate-500 uppercase font-bold">Products</p>
         </div>
@@ -259,21 +259,21 @@ const Inventory: React.FC<InventoryProps> = ({ userId }) => {
           placeholder="Search products…"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full pl-12 pr-4 py-4 bg-white rounded-2xl border border-slate-200 focus:border-purple-300 focus:ring-4 focus:ring-purple-50 font-medium outline-none"
+          className="w-full pl-12 pr-4 py-4 bg-white rounded-2xl border border-slate-200 focus:border-teal-300 focus:ring-4 focus:ring-teal-50 font-medium outline-none"
         />
       </div>
 
       {/* Empty state */}
       {filteredProducts.length === 0 && products.length === 0 && (
         <div className="bg-white rounded-2xl p-12 shadow-sm border border-slate-100 text-center">
-          <Boxes size={64} className="text-purple-600 mx-auto mb-4" />
+          <Boxes size={64} className="text-teal-600 mx-auto mb-4" />
           <h2 className="text-2xl font-bold mb-2">No products yet</h2>
           <p className="text-slate-500 mb-6">
             Add your first product to start tracking your stock.
           </p>
           <button
             onClick={handleAddNew}
-            className="inline-flex items-center gap-3 bg-purple-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-purple-700 transition active:scale-95"
+            className="inline-flex items-center gap-3 bg-teal-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-teal-700 transition active:scale-95"
           >
             <Plus size={20} />
             Add Your First Product
@@ -340,7 +340,7 @@ const Inventory: React.FC<InventoryProps> = ({ userId }) => {
                     </button>
                     <button
                       onClick={() => handleEdit(product)}
-                      className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-purple-50 text-purple-700 rounded-xl font-bold text-xs uppercase hover:bg-purple-100 transition"
+                      className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-teal-50 text-teal-700 rounded-xl font-bold text-xs uppercase hover:bg-teal-100 transition"
                     >
                       <Edit3 size={14} />
                       Edit
@@ -397,7 +397,7 @@ const Inventory: React.FC<InventoryProps> = ({ userId }) => {
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="E.g., Bread"
-                  className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 outline-none focus:border-purple-300 focus:ring-4 focus:ring-purple-100 font-bold"
+                  className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100 font-bold"
                 />
               </div>
 
@@ -410,7 +410,7 @@ const Inventory: React.FC<InventoryProps> = ({ userId }) => {
                   value={formData.category}
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                   placeholder="E.g., Food"
-                  className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 outline-none focus:border-purple-300 focus:ring-4 focus:ring-purple-100 font-medium"
+                  className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100 font-medium"
                 />
               </div>
 
@@ -426,7 +426,7 @@ const Inventory: React.FC<InventoryProps> = ({ userId }) => {
                     value={formData.buyingPrice}
                     onChange={(e) => setFormData({ ...formData, buyingPrice: e.target.value })}
                     placeholder="0.00"
-                    className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 outline-none focus:border-purple-300 focus:ring-4 focus:ring-purple-100 font-bold tabular-nums"
+                    className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100 font-bold tabular-nums"
                   />
                 </div>
                 <div>
@@ -440,7 +440,7 @@ const Inventory: React.FC<InventoryProps> = ({ userId }) => {
                     value={formData.sellingPrice}
                     onChange={(e) => setFormData({ ...formData, sellingPrice: e.target.value })}
                     placeholder="0.00"
-                    className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 outline-none focus:border-purple-300 focus:ring-4 focus:ring-purple-100 font-bold tabular-nums"
+                    className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100 font-bold tabular-nums"
                   />
                 </div>
               </div>
@@ -456,7 +456,7 @@ const Inventory: React.FC<InventoryProps> = ({ userId }) => {
                     value={formData.stockQuantity}
                     onChange={(e) => setFormData({ ...formData, stockQuantity: e.target.value })}
                     placeholder="0"
-                    className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 outline-none focus:border-purple-300 focus:ring-4 focus:ring-purple-100 font-bold tabular-nums"
+                    className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100 font-bold tabular-nums"
                   />
                 </div>
                 <div>
@@ -468,14 +468,14 @@ const Inventory: React.FC<InventoryProps> = ({ userId }) => {
                     value={formData.lowStockThreshold}
                     onChange={(e) => setFormData({ ...formData, lowStockThreshold: e.target.value })}
                     placeholder="5"
-                    className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 outline-none focus:border-purple-300 focus:ring-4 focus:ring-purple-100 font-bold tabular-nums"
+                    className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100 font-bold tabular-nums"
                   />
                 </div>
               </div>
 
               <button
                 type="submit"
-                className="w-full bg-purple-600 text-white py-5 rounded-2xl font-bold text-lg hover:bg-purple-700 transition flex items-center justify-center gap-3 active:scale-[0.99]"
+                className="w-full bg-teal-600 text-white py-5 rounded-2xl font-bold text-lg hover:bg-teal-700 transition flex items-center justify-center gap-3 active:scale-[0.99]"
               >
                 <Save size={20} />
                 {editingId ? 'Save Changes' : 'Add Product'}
@@ -504,7 +504,7 @@ const Inventory: React.FC<InventoryProps> = ({ userId }) => {
               autoFocus
               value={restockQty}
               onChange={(e) => setRestockQty(e.target.value)}
-              className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 outline-none focus:border-purple-300 focus:ring-4 focus:ring-purple-100 font-bold text-3xl text-purple-600 text-center mb-6 tabular-nums"
+              className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100 font-bold text-3xl text-teal-600 text-center mb-6 tabular-nums"
             />
             <div className="flex gap-3">
               <button

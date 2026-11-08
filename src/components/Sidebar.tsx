@@ -41,7 +41,7 @@ export default function Sidebar({ onNavigate, activeView, onLogout }: SidebarPro
   const getLinkClass = (view: string) =>
     `flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm transition-all w-full text-left ${
       activeView === view
-        ? 'bg-purple-600 text-white shadow-sm'
+        ? 'bg-teal-600 text-white shadow-sm'
         : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
     }`;
 
@@ -66,7 +66,7 @@ export default function Sidebar({ onNavigate, activeView, onLogout }: SidebarPro
           <aside className="md:hidden fixed top-0 left-0 bottom-0 w-72 bg-white z-[80] shadow-2xl p-5 flex flex-col overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
-                <div className="h-9 w-9 bg-purple-600 rounded-xl flex items-center justify-center text-white font-bold text-sm">
+                <div className="h-9 w-9 bg-teal-600 rounded-xl flex items-center justify-center text-white font-bold text-sm">
                   SF
                 </div>
                 <div>
@@ -116,7 +116,7 @@ export default function Sidebar({ onNavigate, activeView, onLogout }: SidebarPro
       {/* ===== DESKTOP: static sidebar ===== */}
       <aside className="hidden md:flex md:flex-col w-64 h-screen bg-white border-r border-slate-100 p-6 sticky top-0">
         <div className="flex items-center gap-3 mb-8">
-          <div className="h-10 w-10 bg-purple-600 rounded-xl flex items-center justify-center text-white font-bold text-sm">
+          <div className="h-10 w-10 bg-teal-600 rounded-xl flex items-center justify-center text-white font-bold text-sm">
             SF
           </div>
           <div>

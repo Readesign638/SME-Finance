@@ -27,8 +27,8 @@ const SLIDES_BY_MODE: Record<BusinessMode, Slide[]> = {
       titleSt: 'Rekota thekiso le mekoloto ka metsotsoana',
       bodyEn: 'Tap "Record Sale" to log a customer who pays now. Tap "Record Debt" to log a customer who will pay later. Sales must come from your inventory.',
       bodySt: 'Tobetsa "Rekota Thekiso" ho boloka moreki ea lefang hona joale. Tobetsa "Rekota Sekoloto" ho boloka moreki ea tla lefa hamorao. Thekiso e tlameha ho tsoa thepeng ea hau.',
-      color: 'text-purple-600',
-      bg: 'bg-purple-100'
+      color: 'text-teal-600',
+      bg: 'bg-teal-100'
     },
     {
       icon: Info,
@@ -45,8 +45,8 @@ const SLIDES_BY_MODE: Record<BusinessMode, Slide[]> = {
       titleSt: 'Tlohella AI e bale lipalo tsa hau',
       bodyEn: 'Open the AI tab to ask questions like "Who owes me?" or "What should I restock?" It reads your real data — no setup required.',
       bodySt: 'Bula tabo ea AI ho botsa lipotso tse joalo ka "Ke mang ea nkolotang?" kapa "Ke reke eng hape?" E bala data ea hau ea sebele.',
-      color: 'text-purple-600',
-      bg: 'bg-purple-100'
+      color: 'text-teal-600',
+      bg: 'bg-teal-100'
     }
   ],
   services: [
@@ -56,8 +56,8 @@ const SLIDES_BY_MODE: Record<BusinessMode, Slide[]> = {
       titleSt: 'Rekota seo u se entseng — ha ho hloke thepa',
       bodyEn: 'You offer services, so a "sale" is just a description and an amount — "Haircut + wash — M50". No products to track.',
       bodySt: 'U fana ka litšebeletso, kahoo "thekiso" ke tlhaloso le chelete feela — "Ho kuta moriri — M50". Ha ho lihlahisoa tse lokelang ho lateloa.',
-      color: 'text-purple-600',
-      bg: 'bg-purple-100'
+      color: 'text-teal-600',
+      bg: 'bg-teal-100'
     },
     {
       icon: Info,
@@ -74,8 +74,8 @@ const SLIDES_BY_MODE: Record<BusinessMode, Slide[]> = {
       titleSt: 'Tlohella AI e bale lipalo tsa hau',
       bodyEn: 'Ask the AI: "Who owes me money?" or "How much did I make this week?" It reads your real data and answers instantly.',
       bodySt: 'Botsa AI: "Ke mang ea nkolotang?" kapa "Ke entse chelete e kae bekeng ee?" E bala data ea hau ea sebele.',
-      color: 'text-purple-600',
-      bg: 'bg-purple-100'
+      color: 'text-teal-600',
+      bg: 'bg-teal-100'
     }
   ],
   debts: [
@@ -103,8 +103,8 @@ const SLIDES_BY_MODE: Record<BusinessMode, Slide[]> = {
       titleSt: 'Tšoaea e le e lefiloeng — chelete e ntšoa hang-hang',
       bodyEn: 'When a customer pays, tap "Record Payment" for partial payments, or "Mark Paid" for full payments. It moves from Debts to Sales and updates your cash-up summary.',
       bodySt: 'Ha moreki a lefa, tobetsa "Rekota Tefo" bakeng sa litefello tse sa fellang, kapa "Tšoaea e Lefiloe" bakeng sa tefo e felletseng.',
-      color: 'text-purple-600',
-      bg: 'bg-purple-100'
+      color: 'text-teal-600',
+      bg: 'bg-teal-100'
     }
   ]
 };
@@ -175,7 +175,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({
               onClick={() => setStep(i)}
               aria-label={`Go to slide ${i + 1}`}
               className={`h-1.5 rounded-full transition-all ${
-                i === step ? 'w-6 bg-purple-600' : 'w-1.5 bg-slate-200 hover:bg-slate-300'
+                i === step ? 'w-6 bg-teal-600' : 'w-1.5 bg-slate-200 hover:bg-slate-300'
               }`}
             />
           ))}
@@ -194,7 +194,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({
           )}
           <button
             onClick={handleNext}
-            className="flex-1 flex items-center justify-center gap-2 bg-purple-600 text-white py-3 rounded-xl font-semibold text-sm hover:bg-purple-700 transition active:scale-95"
+            className="flex-1 flex items-center justify-center gap-2 bg-teal-600 text-white py-3 rounded-xl font-semibold text-sm hover:bg-teal-700 transition active:scale-95"
           >
             {isLast ? (
               isSt ? 'Kea utloisisa!' : 'Got it!'

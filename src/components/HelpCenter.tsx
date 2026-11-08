@@ -65,8 +65,8 @@ export default function HelpCenter({ onClose, onContactSupport }: HelpCenterProp
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 bg-slate-50">
           <div className="flex items-center gap-2">
-            <div className="p-1.5 bg-purple-100 rounded-lg">
-              <HelpCircle size={16} className="text-purple-700" />
+            <div className="p-1.5 bg-teal-100 rounded-lg">
+              <HelpCircle size={16} className="text-teal-700" />
             </div>
             <div>
               <p className="text-sm font-bold text-slate-900">Help Center</p>
@@ -95,7 +95,7 @@ export default function HelpCenter({ onClose, onContactSupport }: HelpCenterProp
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search help topics…"
-                className="w-full pl-10 pr-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:border-purple-300 focus:ring-4 focus:ring-purple-50 outline-none text-sm font-medium"
+                className="w-full pl-10 pr-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:border-teal-300 focus:ring-4 focus:ring-teal-50 outline-none text-sm font-medium"
               />
             </div>
 
@@ -103,11 +103,11 @@ export default function HelpCenter({ onClose, onContactSupport }: HelpCenterProp
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => setView('legal')}
-                className="flex flex-col items-start gap-1 p-3 bg-purple-50 rounded-xl hover:bg-purple-100 text-left transition"
+                className="flex flex-col items-start gap-1 p-3 bg-teal-50 rounded-xl hover:bg-teal-100 text-left transition"
               >
-                <Scale size={20} className="text-purple-600" />
-                <span className="text-xs font-bold text-purple-800">Legal Guide</span>
-                <span className="text-[10px] text-purple-600">Terms, privacy, tax</span>
+                <Scale size={20} className="text-teal-600" />
+                <span className="text-xs font-bold text-teal-800">Legal Guide</span>
+                <span className="text-[10px] text-teal-600">Terms, privacy, tax</span>
               </button>
               <a
                 href="mailto:support@smefinance.ls"
@@ -140,7 +140,7 @@ export default function HelpCenter({ onClose, onContactSupport }: HelpCenterProp
             {/* FAQs */}
             <div>
               <h3 className="text-sm font-bold text-slate-900 mb-2 flex items-center gap-2">
-                <BookOpen size={16} className="text-purple-600" />
+                <BookOpen size={16} className="text-teal-600" />
                 Frequently Asked Questions
               </h3>
               {filteredFaqs.length === 0 ? (
@@ -180,7 +180,7 @@ export default function HelpCenter({ onClose, onContactSupport }: HelpCenterProp
             {onContactSupport && (
               <button
                 onClick={onContactSupport}
-                className="w-full py-3 bg-purple-600 text-white rounded-xl font-bold text-sm hover:bg-purple-700"
+                className="w-full py-3 bg-teal-600 text-white rounded-xl font-bold text-sm hover:bg-teal-700 transition-colors"
               >
                 Contact Support
               </button>
@@ -190,7 +190,7 @@ export default function HelpCenter({ onClose, onContactSupport }: HelpCenterProp
           <div className="p-5">
             <button
               onClick={() => setView('home')}
-              className="text-xs font-bold text-purple-600 hover:underline mb-3"
+              className="text-xs font-bold text-teal-600 hover:underline mb-3"
             >
               ← Back to Help Center
             </button>

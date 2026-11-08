@@ -35,8 +35,8 @@ const HIGHLIGHTS = [
     icon: <Boxes size={22} />,
     title: 'Inventory & insights',
     desc: 'Manage stock, see real profit, and get AI-powered advice.',
-    color: 'text-purple-600',
-    bg: 'bg-purple-50',
+    color: 'text-teal-600',
+    bg: 'bg-teal-50',
   },
 ];
 
@@ -74,7 +74,7 @@ export default function Welcome() {
           name="description"
           content="Record sales, track debts, manage inventory and grow with AI. Built for Lesotho SMEs."
         />
-        <meta name="theme-color" content="#7c3aed" />
+        <meta name="theme-color" content="#0d9488" />
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
       </Helmet>
 
@@ -85,7 +85,7 @@ export default function Welcome() {
           style={{ backgroundImage: `url('${BACKGROUND_IMAGE}')` }}
           aria-hidden="true"
         />
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-900/95 via-slate-900/85 to-purple-900/80" />
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-900/95 via-slate-900/85 to-teal-900/80" />
         <div className="absolute inset-0 bg-slate-900/30" />
 
         {/* Content */}
@@ -114,14 +114,14 @@ export default function Welcome() {
               {/* Left: copy */}
               <div className="space-y-6">
                 <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/20">
-                  <Sparkles size={12} className="text-purple-300" />
+                  <Sparkles size={12} className="text-teal-300" />
                   <span className="text-[10px] font-bold uppercase tracking-wider text-white/90">
                     Built for Lesotho SMEs
                   </span>
                 </div>
 
                 <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight leading-[1.05]">
-                  Run your business <span className="text-purple-300">smarter</span>.
+                  Run your business <span className="text-teal-300">smarter</span>.
                 </h1>
 
                 <p className="text-base md:text-lg text-white/80 max-w-lg leading-relaxed">
@@ -131,7 +131,7 @@ export default function Welcome() {
                 <div className="flex flex-col sm:flex-row gap-3 pt-2">
                   <button
                     onClick={() => navigate('/login')}
-                    className="group inline-flex items-center justify-center gap-2 px-6 py-4 rounded-2xl bg-purple-600 text-white font-bold text-base hover:bg-purple-500 transition shadow-2xl shadow-purple-900/50"
+                    className="group inline-flex items-center justify-center gap-2 px-6 py-4 rounded-2xl bg-teal-600 text-white font-bold text-base hover:bg-teal-500 transition shadow-2xl shadow-teal-900/50"
                   >
                     Get started free
                     <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />

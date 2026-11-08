@@ -40,9 +40,9 @@ const TILES: Array<{
     titleSt: 'Ke fana ka litšebeletso',
     descEn: 'Hair, laundry, transport, repairs, tutoring — no stock needed.',
     descSt: 'Moriri, ho hlatsoa, lipalangoang — ha ho hloke stock.',
-    color: 'text-purple-600',
-    bg: 'bg-purple-50',
-    ring: 'ring-purple-500',
+    color: 'text-teal-600',
+    bg: 'bg-teal-50',
+    ring: 'ring-teal-500',
     defaultType: 'Services'
   },
   {
@@ -77,11 +77,11 @@ export default function BusinessSetup({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 flex items-center justify-center p-4 sm:p-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-teal-50 flex items-center justify-center p-4 sm:p-6">
       <div className="w-full max-w-3xl">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100 mb-4">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-50 text-teal-700 border border-teal-100 mb-4">
             <Sparkles size={12} />
             <span className="text-[10px] font-bold uppercase tracking-wider">
               {isSt ? 'Boitokisetso' : 'Setup'} · {isSt ? 'Motsotso o le mong' : '1 minute'}
@@ -146,7 +146,7 @@ export default function BusinessSetup({
           <button
             onClick={handleContinue}
             disabled={!selected || saving}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition active:scale-95"
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-teal-600 text-white font-semibold hover:bg-teal-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition active:scale-95"
           >
             {saving ? (
               <span className="text-sm">{isSt ? 'E boloka…' : 'Saving…'}</span>

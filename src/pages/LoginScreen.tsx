@@ -153,13 +153,13 @@ const LoginScreen: React.FC = () => {
               </div>
 
               <div className="relative group">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-purple-600 transition-colors" size={20} />
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-teal-600 transition-colors" size={20} />
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="Email Address"
-                  className="w-full pl-12 pr-6 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none focus:border-purple-600/20 focus:ring-4 focus:ring-purple-600/5 font-medium transition-all"
+                  className="w-full pl-12 pr-6 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none focus:border-teal-600/20 focus:ring-4 focus:ring-teal-600/5 font-medium transition-all"
                   required
                   autoFocus
                 />
@@ -168,7 +168,7 @@ const LoginScreen: React.FC = () => {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full flex items-center justify-center gap-2 bg-purple-600 text-white font-bold text-base py-4 rounded-2xl hover:bg-purple-700 disabled:bg-purple-300 shadow-lg shadow-purple-500/30 transition-all active:scale-[0.98]"
+                className="w-full flex items-center justify-center gap-2 bg-teal-600 text-white font-bold text-base py-4 rounded-2xl hover:bg-teal-700 disabled:bg-teal-300 shadow-lg shadow-teal-500/30 transition-all active:scale-[0.98]"
               >
                 {loading ? 'Sending…' : <><KeyRound size={18} /> Send Reset Link</>}
               </button>
@@ -176,7 +176,7 @@ const LoginScreen: React.FC = () => {
               <button
                 type="button"
                 onClick={() => { setIsResetting(false); resetAll(); }}
-                className="w-full flex items-center justify-center gap-2 text-sm font-bold text-slate-400 hover:text-purple-600 transition-colors"
+                className="w-full flex items-center justify-center gap-2 text-sm font-bold text-slate-400 hover:text-teal-600 transition-colors"
               >
                 <ArrowLeft size={14} /> Back to login
               </button>
@@ -189,45 +189,45 @@ const LoginScreen: React.FC = () => {
               <form onSubmit={handleSubmit} className="space-y-4">
                 {isRegistering && (
                   <div className="relative group">
-                    <Building className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-purple-600 transition-colors" size={20} />
+                    <Building className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-teal-600 transition-colors" size={20} />
                     <input
                       type="text"
                       value={businessName}
                       onChange={(e) => setBusinessName(e.target.value)}
                       placeholder="Business Name"
                       required={isRegistering}
-                      className="w-full pl-12 pr-6 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none focus:border-purple-600/20 focus:ring-4 focus:ring-purple-600/5 font-medium transition-all"
+                      className="w-full pl-12 pr-6 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none focus:border-teal-600/20 focus:ring-4 focus:ring-teal-600/5 font-medium transition-all"
                     />
                   </div>
                 )}
 
                 <div className="relative group">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-purple-600 transition-colors" size={20} />
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-teal-600 transition-colors" size={20} />
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="Email Address"
-                    className="w-full pl-12 pr-6 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none focus:border-purple-600/20 focus:ring-4 focus:ring-purple-600/5 font-medium transition-all"
+                    className="w-full pl-12 pr-6 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none focus:border-teal-600/20 focus:ring-4 focus:ring-teal-600/5 font-medium transition-all"
                     required
                   />
                 </div>
 
                 <div className="relative group">
-                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-purple-600 transition-colors" size={20} />
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-teal-600 transition-colors" size={20} />
                   <input
                     type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Password (at least 6 characters)"
-                    className="w-full pl-12 pr-12 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none focus:border-purple-600/20 focus:ring-4 focus:ring-purple-600/5 font-medium transition-all"
+                    className="w-full pl-12 pr-12 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none focus:border-teal-600/20 focus:ring-4 focus:ring-teal-600/5 font-medium transition-all"
                     required
                     minLength={6}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 hover:text-purple-600 transition-colors"
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 hover:text-teal-600 transition-colors"
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
                     {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
@@ -239,7 +239,7 @@ const LoginScreen: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => { setIsResetting(true); resetAll(); }}
-                      className="text-xs font-bold text-slate-400 hover:text-purple-600 transition-colors"
+                      className="text-xs font-bold text-slate-400 hover:text-teal-600 transition-colors"
                     >
                       Forgot password?
                     </button>
@@ -249,7 +249,7 @@ const LoginScreen: React.FC = () => {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full flex items-center justify-center gap-2 bg-purple-600 text-white font-bold text-base py-4 rounded-2xl hover:bg-purple-700 disabled:bg-purple-300 shadow-lg shadow-purple-500/30 transition-all active:scale-[0.98]"
+                  className="w-full flex items-center justify-center gap-2 bg-teal-600 text-white font-bold text-base py-4 rounded-2xl hover:bg-teal-700 disabled:bg-teal-300 shadow-lg shadow-teal-500/30 transition-all active:scale-[0.98]"
                 >
                   {loading
                     ? 'Please wait…'
@@ -262,7 +262,7 @@ const LoginScreen: React.FC = () => {
               <button
                 type="button"
                 onClick={() => { setIsRegistering(!isRegistering); resetAll(); }}
-                className="w-full mt-6 text-sm font-bold text-slate-400 hover:text-purple-600 transition-colors"
+                className="w-full mt-6 text-sm font-bold text-slate-400 hover:text-teal-600 transition-colors"
               >
                 {isRegistering ? 'Back to Login' : 'New merchant? Register Business'}
               </button>

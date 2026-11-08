@@ -356,8 +356,8 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
 
       {/* Header */}
       <div className="flex items-center gap-3 py-2">
-        <div className="p-2.5 bg-purple-100 rounded-2xl">
-          <Bot size={22} className="text-purple-700" />
+        <div className="p-2.5 bg-teal-100 rounded-2xl">
+          <Bot size={22} className="text-teal-700" />
         </div>
         <div>
           <h1 className="text-xl font-bold text-slate-900">AI Business Assistant</h1>
@@ -376,7 +376,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
               <Trash2 size={16} />
             </button>
           )}
-          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-purple-50 text-purple-700 text-[10px] font-bold uppercase tracking-wider border border-purple-100">
+          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-teal-50 text-teal-700 text-[10px] font-bold uppercase tracking-wider border border-teal-100">
             <Sparkles size={10} /> Beta
           </span>
         </div>
@@ -401,7 +401,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
       )}
 
       {/* Value banner */}
-      <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 text-sm text-purple-800">
+      <div className="bg-teal-50 border border-teal-200 rounded-2xl p-4 text-sm text-teal-800">
         {language === 'st' ? (
           <>
             <strong>Hobaneng u sebelisa AI?</strong> E bala lintlha tsa hau tsa 'nete tsa lichelete le thepa ho u fa likarabo tsa hang-hang mabapi le phallo ea chelete, mekoloto le boemo ba thepa—ho u thusa ho etsa liqeto kapele.
@@ -438,8 +438,8 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
                 className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 {message.role === 'ai' && (
-                  <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0">
-                    <Bot size={18} className="text-purple-700" />
+                  <div className="w-8 h-8 rounded-full bg-teal-100 flex items-center justify-center flex-shrink-0">
+                    <Bot size={18} className="text-teal-700" />
                   </div>
                 )}
 
@@ -478,7 +478,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
                     <div className="flex items-center gap-1 mt-1.5 ml-1">
                       <button
                         onClick={() => handleCopy(message.id, message.text)}
-                        className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold text-slate-500 hover:text-purple-700 hover:bg-purple-50 transition"
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold text-slate-500 hover:text-teal-700 hover:bg-teal-50 transition"
                         title="Copy answer"
                         aria-label="Copy answer"
                       >
@@ -499,7 +499,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
                         <button
                           onClick={handleRetry}
                           disabled={loading || !onlineStatus}
-                          className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold text-slate-500 hover:text-purple-700 hover:bg-purple-50 transition disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-slate-500"
+                          className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold text-slate-500 hover:text-teal-700 hover:bg-teal-50 transition disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-slate-500"
                           title="Regenerate answer"
                           aria-label="Retry"
                         >
@@ -512,7 +512,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
                 </div>
 
                 {message.role === 'user' && (
-                  <div className="w-8 h-8 rounded-full bg-purple-600 text-white flex items-center justify-center flex-shrink-0">
+                  <div className="w-8 h-8 rounded-full bg-teal-600 text-white flex items-center justify-center flex-shrink-0">
                     <User size={16} />
                   </div>
                 )}
@@ -522,11 +522,11 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
 
           {loading && (
             <div className="flex gap-3 justify-start">
-              <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
-                <Bot size={18} className="text-purple-700" />
+              <div className="w-8 h-8 rounded-full bg-teal-100 flex items-center justify-center">
+                <Bot size={18} className="text-teal-700" />
               </div>
               <div className="bg-white border border-slate-200 rounded-2xl px-4 py-3 flex items-center gap-2 shadow-sm">
-                <Loader2 size={16} className="animate-spin text-purple-600" />
+                <Loader2 size={16} className="animate-spin text-teal-600" />
                 <span className="text-sm text-slate-500">Thinking…</span>
               </div>
             </div>
@@ -550,7 +550,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
                 <button
                   key={prompt}
                   onClick={() => handleQuickPrompt(prompt)}
-                  className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-full text-xs font-semibold transition"
+                  className="px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-full text-xs font-semibold transition"
                 >
                   {prompt}
                 </button>
@@ -563,7 +563,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
         {suggestions.length > 0 && (
           <div className="px-4 md:px-6 pb-4 border-t border-slate-100 pt-3">
             <p className="text-[10px] font-bold uppercase text-slate-400 mb-2 flex items-center gap-1">
-              <Sparkles size={12} className="text-purple-500" />
+              <Sparkles size={12} className="text-teal-500" />
               {language === 'st' ? 'Tsoela pele ho botsa' : 'Suggested follow-ups'}
             </p>
             <div className="flex flex-wrap gap-2">
@@ -572,7 +572,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
                   key={prompt}
                   onClick={() => sendQuestion(prompt)}
                   disabled={loading || !onlineStatus}
-                  className="px-3 py-1.5 bg-slate-50 hover:bg-purple-50 hover:text-purple-700 text-slate-600 rounded-full text-xs font-semibold transition disabled:opacity-40"
+                  className="px-3 py-1.5 bg-slate-50 hover:bg-teal-50 hover:text-teal-700 text-slate-600 rounded-full text-xs font-semibold transition disabled:opacity-40"
                 >
                   {prompt}
                 </button>
@@ -592,13 +592,13 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
               rows={1}
               disabled={loading || !onlineStatus}
               aria-label="Message the AI assistant"
-              className="flex-1 p-3.5 bg-slate-50 rounded-2xl outline-none focus:ring-4 focus:ring-purple-100 font-medium resize-none disabled:opacity-50 text-sm"
+              className="flex-1 p-3.5 bg-slate-50 rounded-2xl outline-none focus:ring-4 focus:ring-teal-100 font-medium resize-none disabled:opacity-50 text-sm"
             />
             <button
               onClick={handleSend}
               disabled={loading || !input.trim() || !onlineStatus}
               aria-label="Send message"
-              className="px-5 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-300 text-white rounded-2xl font-semibold flex items-center transition active:scale-95"
+              className="px-5 bg-teal-600 hover:bg-teal-700 disabled:bg-slate-300 text-white rounded-2xl font-semibold flex items-center transition active:scale-95"
             >
               <Send size={18} />
             </button>
@@ -618,16 +618,16 @@ const AIAssistant: React.FC<AIAssistantProps> = ({
       {/* Examples */}
       <div className="sf-card p-6">
         <h3 className="font-bold text-base mb-3 flex items-center gap-2">
-          <Sparkles size={18} className="text-purple-600" />
+          <Sparkles size={18} className="text-teal-600" />
           {language === 'st' ? 'U ka botsa' : 'You can ask'}
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-slate-600">
-          <div className="flex items-start gap-2"><span className="text-purple-600">•</span><span>"Am I making a profit?"</span></div>
-          <div className="flex items-start gap-2"><span className="text-purple-600">•</span><span>"What are my biggest expenses?"</span></div>
-          <div className="flex items-start gap-2"><span className="text-purple-600">•</span><span>"How much did I sell today?"</span></div>
-          <div className="flex items-start gap-2"><span className="text-purple-600">•</span><span>"Who owes me money?"</span></div>
-          <div className="flex items-start gap-2"><span className="text-purple-600">•</span><span>"Which products sell best?"</span></div>
-          <div className="flex items-start gap-2"><span className="text-purple-600">•</span><span>"What should I restock?"</span></div>
+          <div className="flex items-start gap-2"><span className="text-teal-600">•</span><span>"Am I making a profit?"</span></div>
+          <div className="flex items-start gap-2"><span className="text-teal-600">•</span><span>"What are my biggest expenses?"</span></div>
+          <div className="flex items-start gap-2"><span className="text-teal-600">•</span><span>"How much did I sell today?"</span></div>
+          <div className="flex items-start gap-2"><span className="text-teal-600">•</span><span>"Who owes me money?"</span></div>
+          <div className="flex items-start gap-2"><span className="text-teal-600">•</span><span>"Which products sell best?"</span></div>
+          <div className="flex items-start gap-2"><span className="text-teal-600">•</span><span>"What should I restock?"</span></div>
         </div>
       </div>
     </div>

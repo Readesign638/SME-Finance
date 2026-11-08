@@ -28,9 +28,9 @@ const CONTENT: Record<LegalSection, { title: string; updated: string; body: Reac
     body: (
       <div className="space-y-4 text-sm text-slate-700 leading-relaxed">
         <p>Welcome to SME Finance. This Legal Guide explains your rights and responsibilities as a merchant using our platform, and how we handle your data in compliance with the laws of the Kingdom of Lesotho.</p>
-        <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
-          <p className="font-bold text-purple-900 mb-1">Important</p>
-          <p className="text-purple-800">This guide is informational only and does not constitute legal advice. Consult a licensed Lesotho attorney for legal matters specific to your business.</p>
+        <div className="bg-teal-50 border border-teal-200 rounded-xl p-4">
+          <p className="font-bold text-teal-900 mb-1">Important</p>
+          <p className="text-teal-800">This guide is informational only and does not constitute legal advice. Consult a licensed Lesotho attorney for legal matters specific to your business.</p>
         </div>
         <h3 className="font-bold text-base mt-4">What's covered</h3>
         <ul className="list-disc pl-5 space-y-1">
@@ -106,7 +106,7 @@ const CONTENT: Record<LegalSection, { title: string; updated: string; body: Reac
           <li><strong>Complain:</strong> lodge a complaint with the Data Protection Commissioner</li>
         </ul>
         <h3 className="font-bold">How to exercise rights</h3>
-        <p>Email <a href="mailto:privacy@smefinance.ls" className="text-purple-600 underline">privacy@smefinance.ls</a>. We respond within 30 days.</p>
+        <p>Email <a href="mailto:privacy@smefinance.ls" className="text-teal-600 underline">privacy@smefinance.ls</a>. We respond within 30 days.</p>
         <h3 className="font-bold">Security</h3>
         <p>Encryption in transit and at rest, role-based access, and regular audits.</p>
         <h3 className="font-bold">Regulator</h3>
@@ -132,7 +132,7 @@ const CONTENT: Record<LegalSection, { title: string; updated: string; body: Reac
         <h3 className="font-bold">Tax Estimator</h3>
         <p>The in-app Tax Estimator is a guide only. Confirm your liability with the LRA or a qualified practitioner.</p>
         <h3 className="font-bold">LRA</h3>
-        <p><a href="https://www.lra.org.ls" target="_blank" rel="noopener noreferrer" className="text-purple-600 underline">lra.org.ls</a> · +266 2231 1339</p>
+        <p><a href="https://www.lra.org.ls" target="_blank" rel="noopener noreferrer" className="text-teal-600 underline">lra.org.ls</a> · +266 2231 1339</p>
       </div>
     ),
   },
@@ -166,7 +166,7 @@ const CONTENT: Record<LegalSection, { title: string; updated: string; body: Reac
     body: (
       <div className="space-y-4 text-sm text-slate-700 leading-relaxed">
         <h3 className="font-bold">Between you and SME Finance</h3>
-        <p>Email <a href="mailto:support@smefinance.ls" className="text-purple-600 underline">support@smefinance.ls</a>. We aim to resolve matters within 14 days, else mediation in Maseru under Lesotho law.</p>
+        <p>Email <a href="mailto:support@smefinance.ls" className="text-teal-600 underline">support@smefinance.ls</a>. We aim to resolve matters within 14 days, else mediation in Maseru under Lesotho law.</p>
         <h3 className="font-bold">Between you and your customers</h3>
         <ol className="list-decimal pl-5 space-y-1">
           <li>Discuss the issue directly and in writing</li>
@@ -213,8 +213,8 @@ export default function LegalGuide({ onClose, initialSection = 'overview' }: Leg
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 bg-slate-50">
           <div className="flex items-center gap-2">
-            <div className="p-1.5 bg-purple-100 rounded-lg">
-              <Scale size={16} className="text-purple-700" />
+            <div className="p-1.5 bg-teal-100 rounded-lg">
+              <Scale size={16} className="text-teal-700" />
             </div>
             <div>
               <p className="text-sm font-bold text-slate-900">Legal Guide</p>
@@ -240,7 +240,7 @@ export default function LegalGuide({ onClose, initialSection = 'overview' }: Leg
                 key={s.id}
                 onClick={() => setActive(s.id)}
                 className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-semibold transition ${
-                  active === s.id ? 'bg-purple-600 text-white' : 'text-slate-600 hover:bg-white hover:text-slate-900'
+                  active === s.id ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-white hover:text-slate-900'
                 }`}
               >
                 {s.icon}

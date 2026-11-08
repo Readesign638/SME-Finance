@@ -5,13 +5,14 @@ import {
   ShieldCheck, MessageCircle, Mail, HelpCircle, Scale, BookOpen,
   User, Settings, Wallet, TrendingUp, History, BarChart3, Bell, Save,
   Package, Wifi, WifiOff, Bot, AlertTriangle, Boxes, CreditCard, MessageSquare,
-  ArrowUp, HandCoins, Banknote, Sparkles, Phone, Receipt
+  ArrowUp, HandCoins, Banknote, Sparkles, Phone, Receipt, Star, Bug, Send, MessageSquarePlus
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { Helmet, HelmetProvider } from 'react-helmet-async';
 import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import { StatCard } from '../components/StatCard';
@@ -35,9 +36,10 @@ import {
 import { formatCurrency } from '../utils/formatters';
 import {
   auth,
+  db, // Ensure db is exported from your firebase.ts
   subscribeToTransactions,
   createTransaction,
-  editTransaction, // <-- Make sure this is imported!
+  editTransaction,
   removeTransaction,
   logoutUser
 } from '../services/firebase';
@@ -60,7 +62,7 @@ const SEO = ({ view }: { view: string }) => {
       <title>{title}</title>
       <meta name="description" content={description} />
       <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-      <meta name="theme-color" content="#7c3aed" />
+      <meta name="theme-color" content="#0d9488" />
     </Helmet>
   );
 };
@@ -113,6 +115,14 @@ export default function Dashboard() {
   const [aiDrawerOpen, setAiDrawerOpen] = useState(false);
   const [legalGuideOpen, setLegalGuideOpen] = useState(false);
   const [helpCenterOpen, setHelpCenterOpen] = useState(false);
+
+  // --- RATING & FEEDBACK STATES ---
+  const [ratingValue, setRatingValue] = useState(() => Number(localStorage.getItem('khotsopay_rating')) || 0);
+  const [ratingModalOpen, setRatingModalOpen] = useState(false);
+  const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
+  const [feedbackType, setFeedbackType] = useState<'bug' | 'feature'>('bug');
+  const [feedbackText, setFeedbackText] = useState('');
+  const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
 
   // Sale form
   const [saleName, setSaleName] = useState('');
@@ -245,6 +255,17 @@ export default function Dashboard() {
     };
   }, []);
 
+  // Auto-popup rating modal after 8 seconds if not rated
+  useEffect(() => {
+    const hasRated = localStorage.getItem('khotsopay_rating');
+    if (!hasRated && user && businessMode && !checkingAuth) { 
+      const timer = setTimeout(() => {
+        setRatingModalOpen(true);
+      }, 8000); // 8 seconds
+      return () => clearTimeout(timer);
+    }
+  }, [user, businessMode, checkingAuth]);
+
   // ---- Derived lists ----
   const sales = useMemo(
     () => (allTransactions || []).filter((t) => t.status === 'Completed' && t.type !== 'expense'),
@@ -371,7 +392,7 @@ export default function Dashboard() {
     setSaleMethod('M-Pesa');
     setSaleDesc('');
     setSaleAmount('');
-    setEditingSaleId(null); // Clear editing state
+    setEditingSaleId(null);
     setSaleModalOpen(false);
   }, []);
 
@@ -386,7 +407,7 @@ export default function Dashboard() {
     setDebtNotes('');
     setDebtDesc('');
     setDebtAmount('');
-    setEditingDebtId(null); // Clear editing state
+    setEditingDebtId(null);
     setDebtModalOpen(false);
   }, []);
 
@@ -397,7 +418,6 @@ export default function Dashboard() {
     setExpenseModalOpen(false);
   }, []);
 
-  // --- UPDATED: Open Modals now handle editing ---
   const openSaleModal = (tx?: Transaction) => {
     if (businessMode === 'products' && products.length === 0 && !tx) {
       setInventoryPromptOpen(true);
@@ -479,7 +499,6 @@ export default function Dashboard() {
     ? debtItems.map((i) => `${i.quantity}x ${i.productName}`).join(', ')
     : debtDesc.trim();
 
-  // --- UPDATED: Submit Sales Handles Edit ---
   const submitSale = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !businessMode) return;
@@ -487,16 +506,13 @@ export default function Dashboard() {
     if (businessMode === 'products' && !editingSaleId && saleItems.length === 0) {
       alert('Add at least one product.'); return;
     }
-    if ((businessMode !== 'products' || editingSaleId) && (!saleDesc.trim() || !saleAmount || parseFloat(saleAmount) <= 0) && editingSaleId) {
-       // If editing a product sale, allow just changing the name/amount without description
-    } else if (businessMode !== 'products' && (!saleDesc.trim() || !saleAmount || parseFloat(saleAmount) <= 0)) {
+    if (businessMode !== 'products' && !editingSaleId && (!saleDesc.trim() || !saleAmount || parseFloat(saleAmount) <= 0)) {
       alert('Enter a description and amount.'); return;
     }
 
     const now = new Date();
     try {
       if (editingSaleId) {
-        // UPDATE EXISTING SALE
         await editTransaction(editingSaleId, {
           name: saleName,
           items: saleItemsText,
@@ -504,7 +520,6 @@ export default function Dashboard() {
           method: saleMethod,
         } as Partial<Transaction>);
       } else {
-        // CREATE NEW SALE
         await createTransaction(user.uid, {
           name: saleName,
           items: saleItemsText,
@@ -524,7 +539,6 @@ export default function Dashboard() {
     }
   };
 
-  // --- UPDATED: Submit Debts Handles Edit ---
   const submitDebt = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !businessMode) return;
@@ -556,10 +570,8 @@ export default function Dashboard() {
       };
 
       if (editingDebtId) {
-        // UPDATE EXISTING DEBT
         await editTransaction(editingDebtId, txData);
       } else {
-        // CREATE NEW DEBT
         await createTransaction(user.uid, {
           ...txData as Omit<Transaction, 'id'>,
           method: 'Cash',
@@ -678,6 +690,40 @@ export default function Dashboard() {
     navigate('/login');
   };
 
+  const handleRate = (star: number) => {
+    setRatingValue(star);
+    localStorage.setItem('khotsopay_rating', star.toString());
+  };
+
+  const submitFeedback = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!feedbackText.trim()) return;
+    setIsSubmittingFeedback(true);
+
+    try {
+      await addDoc(collection(db, 'feedback'), {
+        userId: user?.uid || 'anonymous',
+        userEmail: user?.email || 'anonymous',
+        type: feedbackType,
+        message: feedbackText,
+        createdAt: serverTimestamp(),
+        status: 'open',
+        appVersion: '1.0.0'
+      });
+      alert('Thank you! Your feedback has been sent to the development team.');
+      setFeedbackModalOpen(false);
+      setFeedbackText('');
+    } catch (error) {
+      console.error("Firestore error, falling back to email:", error);
+      const subject = encodeURIComponent(`[${feedbackType.toUpperCase()}] SME Finance Feedback`);
+      const body = encodeURIComponent(`User: ${user?.email || 'Anonymous'}\n\nMessage:\n${feedbackText}`);
+      window.location.href = `mailto:support@smefinance.ls?subject=${subject}&body=${body}`;
+      setFeedbackModalOpen(false);
+    } finally {
+      setIsSubmittingFeedback(false);
+    }
+  };
+
   const exportToPDF = () => {
     const doc = new jsPDF();
     doc.setFont('helvetica', 'bold');
@@ -696,7 +742,7 @@ export default function Dashboard() {
         ['Expenses', formatCurrency(dailyStats.expenses)],
         ['Profit', formatCurrency(dailyStats.profit)]
       ],
-      headStyles: { fillColor: [124, 58, 237] }
+      headStyles: { fillColor: [13, 148, 136] }
     });
     doc.save(`SME_Finance_${dailyStats.date}.pdf`);
   };
@@ -802,7 +848,7 @@ export default function Dashboard() {
     <HelmetProvider>
       <div className="relative flex flex-col md:flex-row min-h-screen bg-slate-50 text-slate-900 antialiased font-sans overflow-hidden">
         
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-gradient-to-br from-purple-200/40 via-blue-100/30 to-transparent blur-3xl -z-10 pointer-events-none rounded-full" />
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-gradient-to-br from-teal-200/40 via-blue-100/30 to-transparent blur-3xl -z-10 pointer-events-none rounded-full" />
 
         <SEO view={currentView} />
 
@@ -831,7 +877,7 @@ export default function Dashboard() {
                 const active = currentView === v;
                 return (
                   <button key={v} onClick={() => setCurrentView(v)}
-                    className={`px-3 py-2 rounded-xl text-[11px] font-semibold uppercase tracking-wide flex items-center gap-1.5 transition-all whitespace-nowrap ${active ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'}`}>
+                    className={`px-3 py-2 rounded-xl text-[11px] font-semibold uppercase tracking-wide flex items-center gap-1.5 transition-all whitespace-nowrap ${active ? 'bg-teal-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'}`}>
                     {v === 'dashboard' && <LayoutDashboard size={14} />}
                     {v === 'transactions' && <ListOrdered size={14} />}
                     {v === 'inventory' && <Boxes size={14} />}
@@ -848,14 +894,14 @@ export default function Dashboard() {
 
             <div className="flex items-center gap-2 md:order-3 ml-auto">
               <div className="flex gap-0.5 bg-white border border-slate-200 rounded-xl p-0.5 shadow-sm">
-                <button onClick={() => setAppLanguage('en')} className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase ${appLanguage === 'en' ? 'bg-purple-600 text-white' : 'text-slate-500'}`}>EN</button>
-                <button onClick={() => setAppLanguage('st')} className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase ${appLanguage === 'st' ? 'bg-purple-600 text-white' : 'text-slate-500'}`}>ST</button>
+                <button onClick={() => setAppLanguage('en')} className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase ${appLanguage === 'en' ? 'bg-teal-600 text-white' : 'text-slate-500'}`}>EN</button>
+                <button onClick={() => setAppLanguage('st')} className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase ${appLanguage === 'st' ? 'bg-teal-600 text-white' : 'text-slate-500'}`}>ST</button>
               </div>
               <div className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-[10px] font-bold uppercase border ${onlineStatus ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
                 <span className={`h-1.5 w-1.5 rounded-full ${onlineStatus ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
                 {onlineStatus ? <Wifi size={12} /> : <WifiOff size={12} />}
               </div>
-              <button onClick={() => setHelpCenterOpen(true)} title="Help Center" aria-label="Open Help Center" className="hidden md:flex p-2.5 bg-white border border-slate-200 text-slate-500 rounded-xl hover:text-purple-600 hover:border-purple-200 hover:bg-purple-50 transition-all">
+              <button onClick={() => setHelpCenterOpen(true)} title="Help Center" aria-label="Open Help Center" className="hidden md:flex p-2.5 bg-white border border-slate-200 text-slate-500 rounded-xl hover:text-teal-600 hover:border-teal-200 hover:bg-teal-50 transition-all">
                 <HelpCircle size={18} />
               </button>
               <button onClick={handleLogout} title="Logout" aria-label="Logout" className="hidden md:block p-2.5 bg-white border border-slate-200 text-slate-500 rounded-xl hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-all">
@@ -867,9 +913,9 @@ export default function Dashboard() {
           {currentView === 'dashboard' && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
               
-              <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-900 to-purple-900 p-6 md:p-10 shadow-xl border border-slate-800">
+              <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-900 to-teal-900 p-6 md:p-10 shadow-xl border border-slate-800">
                 <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 mix-blend-overlay pointer-events-none" />
-                <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-purple-500/20 blur-3xl" />
+                <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-teal-500/20 blur-3xl" />
                 
                 <div className="relative z-10 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8">
                   <div className="space-y-3">
@@ -880,22 +926,36 @@ export default function Dashboard() {
                     <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-white">{t('lumela')}, welcome back.</h1>
                     <p className="text-slate-300 text-base max-w-md">{t('manageBusiness')}</p>
                   </div>
+                  
+                  {/* THE 3 ORIGINAL BUTTONS WITH PREMIUM HOVER EFFECTS */}
                   <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
                     {allowsSales(businessMode) && (
-                      <button onClick={() => openSaleModal()} className="group flex items-center justify-center gap-2 bg-white text-slate-900 px-5 py-3.5 rounded-2xl font-semibold shadow-lg hover:shadow-xl hover:bg-slate-100 transition-all">
-                        <Plus size={18} className="group-hover:rotate-90 transition-transform" />
+                      <button 
+                        onClick={() => openSaleModal()} 
+                        className="group flex items-center justify-center gap-2 bg-white text-slate-900 px-5 py-3.5 rounded-2xl font-semibold shadow-lg shadow-black/10 hover:shadow-2xl hover:shadow-white/20 hover:bg-slate-50 hover:-translate-y-1 transition-all duration-300 active:scale-95"
+                      >
+                        <Plus size={18} className="group-hover:rotate-90 transition-transform duration-300" />
                         <span>Record Sale</span>
                       </button>
                     )}
-                    <button onClick={() => openDebtModal()} className="group flex items-center justify-center gap-2 bg-amber-500 text-white px-5 py-3.5 rounded-2xl font-semibold shadow-lg hover:shadow-xl hover:bg-amber-600 transition-all">
-                      <HandCoins size={18} />
+                    
+                    <button 
+                      onClick={() => openDebtModal()} 
+                      className="group flex items-center justify-center gap-2 bg-amber-500 text-white px-5 py-3.5 rounded-2xl font-semibold shadow-lg shadow-amber-500/20 hover:shadow-2xl hover:shadow-amber-500/40 hover:bg-amber-400 hover:-translate-y-1 transition-all duration-300 active:scale-95"
+                    >
+                      <HandCoins size={18} className="group-hover:-translate-y-1 transition-transform duration-300" />
                       <span>Record Debt</span>
                     </button>
-                    <button onClick={openExpenseModal} className="group flex items-center justify-center gap-2 bg-slate-700 text-white px-5 py-3.5 rounded-2xl font-semibold shadow-lg hover:shadow-xl hover:bg-slate-800 transition-all">
-                      <Receipt size={18} />
+                    
+                    <button 
+                      onClick={openExpenseModal} 
+                      className="group flex items-center justify-center gap-2 bg-slate-700 text-white px-5 py-3.5 rounded-2xl font-semibold shadow-lg shadow-slate-700/20 hover:shadow-2xl hover:shadow-slate-700/40 hover:bg-slate-600 hover:-translate-y-1 transition-all duration-300 active:scale-95"
+                    >
+                      <Receipt size={18} className="group-hover:rotate-12 transition-transform duration-300" />
                       <span>Record Expense</span>
                     </button>
                   </div>
+                  
                 </div>
               </section>
 
@@ -960,7 +1020,7 @@ export default function Dashboard() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatCard title="Total Revenue" value={formatCurrency(stats.totalRevenue)} change="All time" />
                 <StatCard title="M-Pesa" value={formatCurrency(stats.mpesaVolume)} color="red" />
-                <StatCard title="EcoCash" value={formatCurrency(stats.ecocashVolume)} color="purple" />
+                <StatCard title="EcoCash" value={formatCurrency(stats.ecocashVolume)} color="teal" />
                 <StatCard title="Total Expenses" value={formatCurrency(totalExpenses)} color="red" />
               </div>
 
@@ -968,7 +1028,7 @@ export default function Dashboard() {
                 <div className="sf-card p-6">
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="font-bold text-lg flex items-center gap-2"><HandCoins size={20} className="text-amber-600" /> Debts (Sekoloto)</h3>
-                    <button onClick={() => { setCurrentView('transactions'); setLedgerTab('debts'); }} className="text-xs font-bold text-purple-600 hover:underline flex items-center gap-1">
+                    <button onClick={() => { setCurrentView('transactions'); setLedgerTab('debts'); }} className="text-xs font-bold text-teal-600 hover:underline flex items-center gap-1">
                       View All <History size={12} />
                     </button>
                   </div>
@@ -980,9 +1040,9 @@ export default function Dashboard() {
                   </div>
 
                   {debtSummary.noContact > 0 && (
-                    <div className="bg-purple-50 border border-purple-200 rounded-xl p-3 flex items-start gap-2 mb-4">
-                      <Sparkles className="text-purple-600 flex-shrink-0 mt-0.5" size={14} />
-                      <p className="text-xs text-purple-800"><strong>AI insight:</strong> {debtSummary.noContact} debt{debtSummary.noContact > 1 ? 's' : ''} have no phone number. Add contacts so reminders can reach them.</p>
+                    <div className="bg-teal-50 border border-teal-200 rounded-xl p-3 flex items-start gap-2 mb-4">
+                      <Sparkles className="text-teal-600 flex-shrink-0 mt-0.5" size={14} />
+                      <p className="text-xs text-teal-800"><strong>AI insight:</strong> {debtSummary.noContact} debt{debtSummary.noContact > 1 ? 's' : ''} have no phone number. Add contacts so reminders can reach them.</p>
                     </div>
                   )}
 
@@ -1017,9 +1077,9 @@ export default function Dashboard() {
 
               {usesInventory(businessMode) && (
                 <div className="sf-card p-6">
-                  <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Boxes size={20} className="text-purple-600" /> Inventory</h3>
+                  <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Boxes size={20} className="text-teal-600" /> Inventory</h3>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                    <div className="text-center p-4 bg-slate-50 rounded-xl"><Package size={24} className="text-purple-600 mx-auto mb-2" /><p className="text-2xl font-bold tabular-nums">{inventoryStats.totalProducts}</p><p className="text-xs text-slate-500">Products</p></div>
+                    <div className="text-center p-4 bg-slate-50 rounded-xl"><Package size={24} className="text-teal-600 mx-auto mb-2" /><p className="text-2xl font-bold tabular-nums">{inventoryStats.totalProducts}</p><p className="text-xs text-slate-500">Products</p></div>
                     <div className="text-center p-4 bg-slate-50 rounded-xl"><Wallet size={24} className="text-emerald-600 mx-auto mb-2" /><p className="text-2xl font-bold tabular-nums">{formatCurrency(inventoryStats.totalStockValue)}</p><p className="text-xs text-slate-500">Stock value</p></div>
                     <div className="text-center p-4 bg-amber-50 rounded-xl"><AlertTriangle size={24} className="text-amber-600 mx-auto mb-2" /><p className="text-2xl font-bold tabular-nums">{inventoryStats.lowStockCount}</p><p className="text-xs text-slate-500">Low stock</p></div>
                     <div className="text-center p-4 bg-red-50 rounded-xl"><AlertTriangle size={24} className="text-red-600 mx-auto mb-2" /><p className="text-2xl font-bold tabular-nums">{inventoryStats.outOfStockCount}</p><p className="text-xs text-slate-500">Out of stock</p></div>
@@ -1032,7 +1092,7 @@ export default function Dashboard() {
                       </ul>
                     </div>
                   )}
-                  <button onClick={() => setCurrentView('inventory')} className="w-full py-3 bg-purple-50 text-purple-600 rounded-xl font-bold text-sm hover:bg-purple-100 transition flex items-center justify-center gap-2">
+                  <button onClick={() => setCurrentView('inventory')} className="w-full py-3 bg-teal-50 text-teal-600 rounded-xl font-bold text-sm hover:bg-teal-100 transition flex items-center justify-center gap-2">
                     <Boxes size={16} /> Manage Inventory
                   </button>
                 </div>
@@ -1042,18 +1102,18 @@ export default function Dashboard() {
                 <h3 className="font-bold text-lg mb-4">Quick Actions</h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {allowsSales(businessMode) && (
-                    <button onClick={() => openSaleModal()} className="flex flex-col items-center gap-2 p-4 bg-purple-50 rounded-xl hover:bg-purple-100 hover:-translate-y-1 transition-all duration-200"><Plus size={24} className="text-purple-600" /><span className="text-xs font-bold text-purple-700">Record Sale</span></button>
+                    <button onClick={() => openSaleModal()} className="flex flex-col items-center gap-2 p-4 bg-teal-50 rounded-xl hover:bg-teal-100 hover:-translate-y-1 transition-all duration-200"><Plus size={24} className="text-teal-600" /><span className="text-xs font-bold text-teal-700">Record Sale</span></button>
                   )}
                   <button onClick={() => openDebtModal()} className="flex flex-col items-center gap-2 p-4 bg-amber-50 rounded-xl hover:bg-amber-100 hover:-translate-y-1 transition-all duration-200"><HandCoins size={24} className="text-amber-600" /><span className="text-xs font-bold text-amber-700">Record Debt</span></button>
                   <button onClick={openExpenseModal} className="flex flex-col items-center gap-2 p-4 bg-red-50 rounded-xl hover:bg-red-100 hover:-translate-y-1 transition-all duration-200"><Receipt size={24} className="text-red-600" /><span className="text-xs font-bold text-red-700">Record Expense</span></button>
-                  <button onClick={() => setAiDrawerOpen(true)} className="flex flex-col items-center gap-2 p-4 bg-purple-50 rounded-xl hover:bg-purple-100 hover:-translate-y-1 transition-all duration-200"><Bot size={24} className="text-purple-600" /><span className="text-xs font-bold text-purple-700">AI Assistant</span></button>
+                  <button onClick={() => setAiDrawerOpen(true)} className="flex flex-col items-center gap-2 p-4 bg-teal-50 rounded-xl hover:bg-teal-100 hover:-translate-y-1 transition-all duration-200"><Bot size={24} className="text-teal-600" /><span className="text-xs font-bold text-teal-700">AI Assistant</span></button>
                 </div>
               </div>
 
               <div className="sf-card p-6">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="font-bold text-lg">Recent Activity</h3>
-                  <button onClick={() => setCurrentView('transactions')} className="text-xs font-bold text-purple-600 hover:underline flex items-center gap-1">View All <History size={12} /></button>
+                  <button onClick={() => setCurrentView('transactions')} className="text-xs font-bold text-teal-600 hover:underline flex items-center gap-1">View All <History size={12} /></button>
                 </div>
                 {recentTransactions.length === 0 ? (
                   <div className="text-center py-10">
@@ -1111,20 +1171,20 @@ export default function Dashboard() {
                   <div className="relative w-full md:w-80">
                     <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                     <input type="text" placeholder="Search…" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:border-purple-300 focus:ring-4 focus:ring-purple-50 outline-none font-medium text-sm" />
+                      className="w-full pl-10 pr-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:border-teal-300 focus:ring-4 focus:ring-teal-50 outline-none font-medium text-sm" />
                   </div>
                 </div>
 
                 <div className="flex gap-1 px-6 pt-4 border-b border-slate-100">
                   {allowsSales(businessMode) && (
-                    <button onClick={() => setLedgerTab('sales')} className={`px-4 py-3 rounded-t-xl font-semibold text-sm flex items-center gap-2 ${ledgerTab === 'sales' ? 'text-purple-600 border-b-2 border-purple-600' : 'text-slate-500'}`}>
+                    <button onClick={() => setLedgerTab('sales')} className={`px-4 py-3 rounded-t-xl font-semibold text-sm flex items-center gap-2 ${ledgerTab === 'sales' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500'}`}>
                       <Banknote size={16} /> Sales ({sales.length})
                     </button>
                   )}
-                  <button onClick={() => setLedgerTab('debts')} className={`px-4 py-3 rounded-t-xl font-semibold text-sm flex items-center gap-2 ${ledgerTab === 'debts' ? 'text-amber-600 border-b-2 border-amber-600' : 'text-slate-500'}`}>
+                  <button onClick={() => setLedgerTab('debts')} className={`px-4 py-3 rounded-t-xl font-semibold text-sm flex items-center gap-2 ${ledgerTab === 'debts' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500'}`}>
                     <HandCoins size={16} /> Debts ({debts.length})
                   </button>
-                  <button onClick={() => setLedgerTab('expenses')} className={`px-4 py-3 rounded-t-xl font-semibold text-sm flex items-center gap-2 ${ledgerTab === 'expenses' ? 'text-red-600 border-b-2 border-red-600' : 'text-slate-500'}`}>
+                  <button onClick={() => setLedgerTab('expenses')} className={`px-4 py-3 rounded-t-xl font-semibold text-sm flex items-center gap-2 ${ledgerTab === 'expenses' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500'}`}>
                     <Receipt size={16} /> Expenses ({expenses.length})
                   </button>
                 </div>
@@ -1147,7 +1207,7 @@ export default function Dashboard() {
                             <div className="mx-auto h-14 w-14 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 ring-4 ring-white shadow-sm flex items-center justify-center mb-3"><Banknote size={24} className="text-slate-400" /></div>
                             <p className="font-semibold text-slate-700 text-sm">No sales recorded</p>
                             <p className="text-slate-500 text-xs mt-1 mb-4">Record your first sale to see it here.</p>
-                            <button onClick={() => openSaleModal()} className="px-4 py-2 rounded-xl bg-purple-600 text-white font-semibold text-xs hover:bg-purple-700 transition-colors">Record Sale</button>
+                            <button onClick={() => openSaleModal()} className="px-4 py-2 rounded-xl bg-teal-600 text-white font-semibold text-xs hover:bg-teal-700 transition-colors">Record Sale</button>
                           </td></tr>
                         ) : filteredSales.map((tx) => (
                           <tr key={tx.id} className="hover:bg-slate-50/80">
@@ -1168,7 +1228,7 @@ export default function Dashboard() {
                             </td>
                             <td className="py-4 px-6 text-right">
                               <div className="flex justify-end gap-1.5">
-                                <button onClick={() => openSaleModal(tx)} className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-purple-600 hover:border-purple-200 hover:bg-purple-50 transition-colors rounded-lg" title="Edit">
+                                <button onClick={() => openSaleModal(tx)} className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-teal-600 hover:border-teal-200 hover:bg-teal-50 transition-colors rounded-lg" title="Edit">
                                   <Edit3 size={15} />
                                 </button>
                                 <button onClick={() => deleteTx(tx.id)} className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-colors rounded-lg" title="Delete">
@@ -1199,10 +1259,10 @@ export default function Dashboard() {
                       <tbody className="divide-y divide-slate-100">
                         {filteredDebts.length === 0 ? (
                           <tr><td colSpan={6} className="py-14 text-center">
-                            <div className="mx-auto h-14 w-14 rounded-full bg-gradient-to-br from-amber-50 to-amber-100 ring-4 ring-white shadow-sm flex items-center justify-center mb-3"><HandCoins size={24} className="text-amber-400" /></div>
+                            <div className="mx-auto h-14 w-14 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 ring-4 ring-white shadow-sm flex items-center justify-center mb-3"><HandCoins size={24} className="text-slate-400" /></div>
                             <p className="font-semibold text-slate-700 text-sm">No debts recorded</p>
                             <p className="text-slate-500 text-xs mt-1 mb-4">Record a debt to track who owes you.</p>
-                            <button onClick={() => openDebtModal()} className="px-4 py-2 rounded-xl bg-amber-500 text-white font-semibold text-xs hover:bg-amber-600 transition-colors">Record Debt</button>
+                            <button onClick={() => openDebtModal()} className="px-4 py-2 rounded-xl bg-teal-600 text-white font-semibold text-xs hover:bg-teal-700 transition-colors">Record Debt</button>
                           </td></tr>
                         ) : filteredDebts.map((tx) => {
                           const remaining = tx.amount - (tx.amountPaid ?? 0);
@@ -1241,11 +1301,11 @@ export default function Dashboard() {
                                   {tx.customerPhone && (
                                     <>
                                       <button onClick={() => sendReminder(tx, 'whatsapp')} className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors" title="WhatsApp"><MessageCircle size={15} /></button>
-                                      <button onClick={() => sendReminder(tx, 'sms')} className="p-2 bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 transition-colors" title="SMS"><MessageSquare size={15} /></button>
+                                      <button onClick={() => sendReminder(tx, 'sms')} className="p-2 bg-teal-50 text-teal-600 rounded-lg hover:bg-teal-100 transition-colors" title="SMS"><MessageSquare size={15} /></button>
                                     </>
                                   )}
                                   {tx.customerEmail && (
-                                    <button onClick={() => sendReminder(tx, 'email')} className="p-2 bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 transition-colors" title="Email"><Mail size={15} /></button>
+                                    <button onClick={() => sendReminder(tx, 'email')} className="p-2 bg-teal-50 text-teal-600 rounded-lg hover:bg-teal-100 transition-colors" title="Email"><Mail size={15} /></button>
                                   )}
                                   <button onClick={() => { setPaymentModalId(tx.id); setPaymentAmount(''); }} className="p-2 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-100 transition-colors" title="Record payment"><Banknote size={15} /></button>
                                   <button onClick={() => markPaid(tx.id)} className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors" title="Mark fully paid"><CheckCircle2 size={15} /></button>
@@ -1277,10 +1337,10 @@ export default function Dashboard() {
                       <tbody className="divide-y divide-slate-100">
                         {filteredExpenses.length === 0 ? (
                           <tr><td colSpan={4} className="py-14 text-center">
-                            <div className="mx-auto h-14 w-14 rounded-full bg-gradient-to-br from-red-50 to-red-100 ring-4 ring-white shadow-sm flex items-center justify-center mb-3"><Receipt size={24} className="text-red-400" /></div>
+                            <div className="mx-auto h-14 w-14 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 ring-4 ring-white shadow-sm flex items-center justify-center mb-3"><Receipt size={24} className="text-slate-400" /></div>
                             <p className="font-semibold text-slate-700 text-sm">No expenses recorded</p>
                             <p className="text-slate-500 text-xs mt-1 mb-4">Record your first expense to see it here.</p>
-                            <button onClick={openExpenseModal} className="px-4 py-2 rounded-xl bg-red-600 text-white font-semibold text-xs hover:bg-red-700 transition-colors">Record Expense</button>
+                            <button onClick={openExpenseModal} className="px-4 py-2 rounded-xl bg-teal-600 text-white font-semibold text-xs hover:bg-teal-700 transition-colors">Record Expense</button>
                           </td></tr>
                         ) : filteredExpenses.map((tx) => (
                           <tr key={tx.id} className="hover:bg-slate-50/80">
@@ -1289,11 +1349,11 @@ export default function Dashboard() {
                               <span className="text-[10px] text-slate-400 uppercase">{tx.date} • {tx.time}</span>
                             </td>
                             <td className="py-4 px-6">
-                              <span className="text-[10px] font-bold uppercase bg-red-100 text-red-700 px-2.5 py-1 rounded-lg">
+                              <span className="text-[10px] font-bold uppercase bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg">
                                 {tx.category || 'Other'}
                               </span>
                             </td>
-                            <td className="py-4 px-6 text-right font-bold tabular-nums text-red-600">−{formatCurrency(tx.amount)}</td>
+                            <td className="py-4 px-6 text-right font-bold tabular-nums text-slate-900">−{formatCurrency(tx.amount)}</td>
                             <td className="py-4 px-6 text-right">
                               <button onClick={() => deleteTx(tx.id)} className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-colors rounded-lg" title="Delete">
                                 <Trash2 size={15} />
@@ -1310,231 +1370,231 @@ export default function Dashboard() {
           )}
 
           {saleModalOpen && allowsSales(businessMode) && (
-            <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-slate-900/50 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) resetSaleForm(); }}>
-              <div role="dialog" aria-modal="true" className="bg-white w-full max-w-xl rounded-t-3xl sm:rounded-3xl p-6 md:p-10 shadow-2xl relative max-h-[95vh] overflow-y-auto sf-scroll">
-                <button onClick={resetSaleForm} className="absolute right-4 top-4 text-slate-400 hover:text-slate-900 p-2 rounded-xl hover:bg-slate-100" aria-label="Close"><X size={24} /></button>
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="p-2 bg-purple-100 rounded-xl"><Banknote size={22} className="text-purple-600" /></div>
-                  <div>
-                    <h2 className="text-2xl font-bold">{editingSaleId ? 'Edit Sale' : 'Record Sale'}</h2>
-                    <p className="text-xs text-slate-500">{editingSaleId ? 'Update existing transaction' : 'Payment received now'}</p>
+            <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-slate-900/60 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) resetSaleForm(); }}>
+              <div role="dialog" aria-modal="true" className="bg-white w-full max-w-xl rounded-t-3xl sm:rounded-3xl shadow-2xl relative max-h-[95vh] overflow-y-auto sf-scroll">
+                <div className="h-1.5 w-full bg-gradient-to-r from-teal-500 to-emerald-500 rounded-t-3xl" />
+                <div className="p-6 md:p-8">
+                  <button onClick={resetSaleForm} className="absolute right-4 top-4 text-slate-400 hover:text-slate-900 p-2 rounded-xl hover:bg-slate-100" aria-label="Close"><X size={22} /></button>
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="p-2.5 bg-teal-50 border border-teal-100 rounded-2xl"><Banknote size={22} className="text-teal-600" /></div>
+                    <div>
+                      <h2 className="text-2xl font-bold text-slate-900">{editingSaleId ? 'Edit Sale' : 'Record Sale'}</h2>
+                      <p className="text-xs text-slate-500">{editingSaleId ? 'Update existing transaction' : 'Payment received now'}</p>
+                    </div>
                   </div>
+                  <form onSubmit={submitSale} className="space-y-4">
+                    <div>
+                      <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">Customer Name</label>
+                      <input required autoFocus value={saleName} onChange={(e) => setSaleName(e.target.value)} placeholder="Who bought?" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-teal-400 focus:ring-4 focus:ring-teal-50 outline-none font-semibold transition-all" />
+                    </div>
+
+                    {businessMode === 'products' && !editingSaleId ? (
+                      <>
+                        <div className="bg-slate-50 rounded-2xl p-4 space-y-3 border border-slate-100">
+                          <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest">Add Product</label>
+                          <div className="grid grid-cols-3 gap-2">
+                            <select value={saleProductId} onChange={(e) => setSaleProductId(e.target.value)} className="col-span-2 p-3 bg-white rounded-xl border border-slate-200 text-sm focus:border-teal-400 focus:ring-4 focus:ring-teal-50 outline-none">
+                              <option value="">Select product</option>
+                              {products.map((p) => <option key={p.id} value={p.id} disabled={p.stockQuantity === 0}>{p.name} — {p.stockQuantity} left — M {p.sellingPrice}</option>)}
+                            </select>
+                            <input type="number" min="1" value={saleQty} onChange={(e) => setSaleQty(e.target.value)} placeholder="Qty" className="p-3 bg-white rounded-xl border border-slate-200 text-sm focus:border-teal-400 focus:ring-4 focus:ring-teal-50 outline-none" />
+                          </div>
+                          <button type="button" onClick={addSaleItem} className="w-full py-2.5 bg-white border border-teal-200 text-teal-700 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 hover:bg-teal-50 transition"><Plus size={16} /> Add Product</button>
+                        </div>
+                        {saleItems.length > 0 && (
+                          <div className="bg-white border border-slate-200 rounded-2xl p-3 space-y-2">
+                            {saleItems.map((it) => (
+                              <div key={it.productId} className="flex justify-between items-center p-2 bg-slate-50 rounded-xl">
+                                <div><p className="font-medium text-sm">{it.productName}</p><p className="text-xs text-slate-500">{it.quantity} × M {it.unitPrice}</p></div>
+                                <div className="flex items-center gap-2"><span className="font-bold text-sm tabular-nums">{formatCurrency(it.subtotal)}</span><button type="button" onClick={() => removeSaleItem(it.productId)} className="text-red-500 hover:bg-red-50 p-1 rounded-lg"><X size={16} /></button></div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <div className="p-4 rounded-2xl bg-teal-50 border border-teal-100">
+                          <label className="text-[10px] font-bold uppercase text-teal-700 tracking-widest">Total</label>
+                          <p className="text-3xl font-bold text-teal-600 tabular-nums">{formatCurrency(saleTotal)}</p>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div>
+                          <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">{editingSaleId ? 'Description / Items' : 'What did you do?'}</label>
+                          <input required value={saleDesc} onChange={(e) => setSaleDesc(e.target.value)} placeholder="E.g., Haircut + wash, Laundry 5 shirts" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-teal-400 focus:ring-4 focus:ring-teal-50 outline-none font-semibold transition-all" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">Amount (LSL)</label>
+                          <input required type="number" step="0.01" value={saleAmount} onChange={(e) => setSaleAmount(e.target.value)} placeholder="0.00" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-teal-400 focus:ring-4 focus:ring-teal-50 outline-none font-bold text-2xl text-teal-600 tabular-nums transition-all" />
+                        </div>
+                      </>
+                    )}
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {(['M-Pesa', 'EcoCash', 'Cash', 'Card'] as const).map((m) => (
+                        <button key={m} type="button" onClick={() => setSaleMethod(m)}
+                          className={`py-3 rounded-xl text-[10px] font-bold uppercase border-2 transition-all flex flex-col items-center gap-1 ${saleMethod === m ? 'border-teal-500 bg-teal-50 text-teal-700' : 'border-slate-200 text-slate-400 hover:border-slate-300'}`}>
+                          {m === 'M-Pesa' && <div className="bg-white rounded px-2 py-0.5"><img src={MpesaLogo} alt="M-Pesa" className="h-6 w-auto" /></div>}
+                          {m === 'EcoCash' && <div className="bg-white rounded px-2 py-0.5"><img src={EcocashLogo} alt="EcoCash" className="h-6 w-auto" /></div>}
+                          {m === 'Cash' && <Wallet size={16} />}
+                          {m === 'Card' && <CreditCard size={16} />}
+                          {m}
+                        </button>
+                      ))}
+                    </div>
+
+                    {businessMode === 'products' && saleItems.length === 0 && !editingSaleId && (
+                      <p className="text-center text-xs font-semibold text-amber-600 -mt-2">Add at least one product before confirming.</p>
+                    )}
+                    <button
+                      type="submit"
+                      disabled={businessMode === 'products' && saleItems.length === 0 && !editingSaleId}
+                      className="w-full bg-gradient-to-r from-teal-500 to-emerald-600 text-white py-4 rounded-2xl font-bold hover:from-teal-600 hover:to-emerald-700 flex items-center justify-center gap-2 disabled:from-slate-300 disabled:to-slate-300 disabled:cursor-not-allowed shadow-lg shadow-teal-500/30 transition-all active:scale-[0.99]"
+                    >
+                      <CheckCircle2 size={18} /> {editingSaleId ? 'Save Changes' : 'Confirm Sale'}
+                    </button>
+                  </form>
                 </div>
-                <form onSubmit={submitSale} className="space-y-4">
-                  <div>
-                    <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">Customer Name</label>
-                    <input required autoFocus value={saleName} onChange={(e) => setSaleName(e.target.value)} placeholder="Who bought?" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-purple-300 focus:ring-4 focus:ring-purple-100 outline-none font-semibold" />
-                  </div>
-
-                  {businessMode === 'products' && !editingSaleId ? (
-                    <>
-                      <div className="bg-slate-50 rounded-2xl p-4 space-y-3 border border-slate-100">
-                        <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest">Add Product</label>
-                        <div className="grid grid-cols-3 gap-2">
-                          <select value={saleProductId} onChange={(e) => setSaleProductId(e.target.value)} className="col-span-2 p-3 bg-white rounded-xl border border-slate-200 text-sm">
-                            <option value="">Select product</option>
-                            {products.map((p) => <option key={p.id} value={p.id} disabled={p.stockQuantity === 0}>{p.name} — {p.stockQuantity} left — M {p.sellingPrice}</option>)}
-                          </select>
-                          <input type="number" min="1" value={saleQty} onChange={(e) => setSaleQty(e.target.value)} placeholder="Qty" className="p-3 bg-white rounded-xl border border-slate-200 text-sm" />
-                        </div>
-                        <button type="button" onClick={addSaleItem} className="w-full py-2.5 bg-purple-600 text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 hover:bg-purple-700"><Plus size={16} /> Add</button>
-                      </div>
-                      {saleItems.length > 0 && (
-                        <div className="bg-white border border-slate-200 rounded-2xl p-3 space-y-2">
-                          {saleItems.map((it) => (
-                            <div key={it.productId} className="flex justify-between items-center p-2 bg-slate-50 rounded-xl">
-                              <div><p className="font-medium text-sm">{it.productName}</p><p className="text-xs text-slate-500">{it.quantity} × M {it.unitPrice}</p></div>
-                              <div className="flex items-center gap-2"><span className="font-bold text-sm tabular-nums">{formatCurrency(it.subtotal)}</span><button type="button" onClick={() => removeSaleItem(it.productId)} className="text-red-500"><X size={16} /></button></div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      <div>
-                        <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">Total</label>
-                        <p className="text-3xl font-bold text-purple-600 tabular-nums">{formatCurrency(saleTotal)}</p>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div>
-                        <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">{editingSaleId ? 'Description / Items' : 'What did you do?'}</label>
-                        <input required value={saleDesc} onChange={(e) => setSaleDesc(e.target.value)} placeholder="E.g., Haircut + wash, Laundry 5 shirts" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-purple-300 focus:ring-4 focus:ring-purple-100 outline-none font-semibold" />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">Amount (LSL)</label>
-                        <input required type="number" step="0.01" value={saleAmount} onChange={(e) => setSaleAmount(e.target.value)} placeholder="0.00" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-purple-300 focus:ring-4 focus:ring-purple-100 outline-none font-bold text-2xl text-purple-600 tabular-nums" />
-                      </div>
-                    </>
-                  )}
-
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    {(['M-Pesa', 'EcoCash', 'Cash', 'Card'] as const).map((m) => (
-                      <button key={m} type="button" onClick={() => setSaleMethod(m)}
-                        className={`py-3 rounded-xl text-[10px] font-bold uppercase border-2 transition-all flex flex-col items-center gap-1 ${saleMethod === m ? 'border-purple-600 bg-purple-50 text-purple-600' : 'border-slate-200 text-slate-400'}`}>
-                        {m === 'M-Pesa' && <div className="bg-white rounded px-2 py-0.5"><img src={MpesaLogo} alt="M-Pesa" className="h-6 w-auto" /></div>}
-                        {m === 'EcoCash' && <div className="bg-white rounded px-2 py-0.5"><img src={EcocashLogo} alt="EcoCash" className="h-6 w-auto" /></div>}
-                        {m === 'Cash' && <Wallet size={16} />}
-                        {m === 'Card' && <CreditCard size={16} />}
-                        {m}
-                      </button>
-                    ))}
-                  </div>
-
-                  {businessMode === 'products' && saleItems.length === 0 && !editingSaleId && (
-                    <p className="text-center text-xs font-semibold text-amber-600 -mt-2">Add at least one product before confirming.</p>
-                  )}
-                  <button
-                    type="submit"
-                    disabled={businessMode === 'products' && saleItems.length === 0 && !editingSaleId}
-                    className="w-full bg-purple-600 text-white py-4 rounded-2xl font-bold hover:bg-purple-700 flex items-center justify-center gap-2 disabled:bg-slate-300 disabled:cursor-not-allowed disabled:hover:bg-slate-300"
-                  >
-                    <CheckCircle2 size={18} /> {editingSaleId ? 'Save Changes' : 'Confirm Sale'}
-                  </button>
-                </form>
               </div>
             </div>
           )}
 
           {debtModalOpen && (
-            <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-slate-900/50 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) resetDebtForm(); }}>
-              <div role="dialog" aria-modal="true" className="bg-white w-full max-w-xl rounded-t-3xl sm:rounded-3xl p-6 md:p-10 shadow-2xl relative max-h-[95vh] overflow-y-auto sf-scroll">
-                <button onClick={resetDebtForm} className="absolute right-4 top-4 text-slate-400 hover:text-slate-900 p-2 rounded-xl hover:bg-slate-100" aria-label="Close"><X size={24} /></button>
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="p-2 bg-amber-100 rounded-xl"><HandCoins size={22} className="text-amber-600" /></div>
-                  <div>
-                    <h2 className="text-2xl font-bold">{editingDebtId ? 'Edit Debt' : 'Record Debt'}</h2>
-                    <p className="text-xs text-slate-500">{editingDebtId ? 'Update existing debt record' : 'Customer will pay later'}</p>
+            <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-slate-900/60 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) resetDebtForm(); }}>
+              <div role="dialog" aria-modal="true" className="bg-white w-full max-w-xl rounded-t-3xl sm:rounded-3xl shadow-2xl relative max-h-[95vh] overflow-y-auto sf-scroll">
+                <div className="h-1.5 w-full bg-gradient-to-r from-teal-500 to-emerald-500 rounded-t-3xl" />
+                <div className="p-6 md:p-8">
+                  <button onClick={resetDebtForm} className="absolute right-4 top-4 text-slate-400 hover:text-slate-900 p-2 rounded-xl hover:bg-slate-100" aria-label="Close"><X size={22} /></button>
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="p-2.5 bg-teal-50 border border-teal-100 rounded-2xl"><HandCoins size={22} className="text-teal-600" /></div>
+                    <div>
+                      <h2 className="text-2xl font-bold text-slate-900">{editingDebtId ? 'Edit Debt' : 'Record Debt'}</h2>
+                      <p className="text-xs text-slate-500">{editingDebtId ? 'Update existing debt record' : 'Customer will pay later'}</p>
+                    </div>
                   </div>
+                  <form onSubmit={submitDebt} className="space-y-4">
+                    <div>
+                      <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">Customer Name</label>
+                      <input required autoFocus value={debtName} onChange={(e) => setDebtName(e.target.value)} placeholder="Who owes you?" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-teal-400 focus:ring-4 focus:ring-teal-50 outline-none font-semibold transition-all" />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">Phone <span className="text-rose-500">*</span></label>
+                        <input required type="tel" maxLength={8} minLength={8} value={debtPhone} onChange={(e) => setDebtPhone(e.target.value.replace(/\D/g, ''))} placeholder="e.g. 58123456" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-teal-400 focus:ring-4 focus:ring-teal-50 outline-none font-semibold transition-all" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">Email <span className="text-slate-400 font-normal">(optional)</span></label>
+                        <input type="email" value={debtEmail} onChange={(e) => setDebtEmail(e.target.value)} placeholder="customer@email.com" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-teal-400 focus:ring-4 focus:ring-teal-50 outline-none font-semibold transition-all" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">Due Date <span className="text-rose-500">*</span></label>
+                      <input required type="date" value={debtDueDate} onChange={(e) => setDebtDueDate(e.target.value)} className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-teal-400 focus:ring-4 focus:ring-teal-50 outline-none font-semibold transition-all" />
+                    </div>
+
+                    {businessMode === 'products' && !editingDebtId ? (
+                      <>
+                        <div className="bg-slate-50 rounded-2xl p-4 space-y-3 border border-slate-100">
+                          <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest">Products Owed</label>
+                          <div className="grid grid-cols-3 gap-2">
+                            <select value={debtProductId} onChange={(e) => setDebtProductId(e.target.value)} className="col-span-2 p-3 bg-white rounded-xl border border-slate-200 text-sm focus:border-teal-400 focus:ring-4 focus:ring-teal-50 outline-none">
+                              <option value="">Select product</option>
+                              {products.map((p) => <option key={p.id} value={p.id} disabled={p.stockQuantity === 0}>{p.name} — {p.stockQuantity} left — M {p.sellingPrice}</option>)}
+                            </select>
+                            <input type="number" min="1" value={debtQty} onChange={(e) => setDebtQty(e.target.value)} placeholder="Qty" className="p-3 bg-white rounded-xl border border-slate-200 text-sm focus:border-teal-400 focus:ring-4 focus:ring-teal-50 outline-none" />
+                          </div>
+                          <button type="button" onClick={addDebtItem} className="w-full py-2.5 bg-white border border-teal-200 text-teal-700 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 hover:bg-teal-50 transition"><Plus size={16} /> Add Product</button>
+                        </div>
+                        {debtItems.length > 0 && (
+                          <div className="bg-white border border-slate-200 rounded-2xl p-3 space-y-2">
+                            {debtItems.map((it) => (
+                              <div key={it.productId} className="flex justify-between items-center p-2 bg-slate-50 rounded-xl">
+                                <div><p className="font-medium text-sm">{it.productName}</p><p className="text-xs text-slate-500">{it.quantity} × M {it.unitPrice}</p></div>
+                                <div className="flex items-center gap-2"><span className="font-bold text-sm tabular-nums">{formatCurrency(it.subtotal)}</span><button type="button" onClick={() => removeDebtItem(it.productId)} className="text-red-500 hover:bg-red-50 p-1 rounded-lg"><X size={16} /></button></div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <div className="p-4 rounded-2xl bg-teal-50 border border-teal-100">
+                          <label className="text-[10px] font-bold uppercase text-teal-700 tracking-widest">Total Owed</label>
+                          <p className="text-3xl font-bold text-teal-600 tabular-nums">{formatCurrency(debtTotal)}</p>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div>
+                          <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">{editingDebtId ? 'Description / Items' : 'What do they owe you for?'}</label>
+                          <input required value={debtDesc} onChange={(e) => setDebtDesc(e.target.value)} placeholder="E.g., Haircut, Laundry, Loan" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-teal-400 focus:ring-4 focus:ring-teal-50 outline-none font-semibold transition-all" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">Amount (LSL)</label>
+                          <input required type="number" step="0.01" value={debtAmount} onChange={(e) => setDebtAmount(e.target.value)} placeholder="0.00" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-teal-400 focus:ring-4 focus:ring-teal-50 outline-none font-bold text-2xl text-teal-600 tabular-nums transition-all" />
+                        </div>
+                      </>
+                    )}
+
+                    <div>
+                      <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">Notes (optional)</label>
+                      <textarea value={debtNotes} onChange={(e) => setDebtNotes(e.target.value)} rows={2} placeholder="E.g. promised to pay Friday" className="w-full mt-1 p-3 bg-slate-50 rounded-xl border border-slate-200 focus:border-teal-400 focus:ring-4 focus:ring-teal-50 outline-none text-sm resize-none transition-all" />
+                    </div>
+
+                    {businessMode === 'products' && debtItems.length === 0 && !editingDebtId && (
+                      <p className="text-center text-xs font-semibold text-amber-600 -mt-2">Add at least one product before saving.</p>
+                    )}
+                    <button
+                      type="submit"
+                      disabled={businessMode === 'products' && debtItems.length === 0 && !editingDebtId}
+                      className="w-full bg-gradient-to-r from-teal-500 to-emerald-600 text-white py-4 rounded-2xl font-bold hover:from-teal-600 hover:to-emerald-700 flex items-center justify-center gap-2 disabled:from-slate-300 disabled:to-slate-300 disabled:cursor-not-allowed shadow-lg shadow-teal-500/30 transition-all active:scale-[0.99]"
+                    >
+                      <HandCoins size={18} /> {editingDebtId ? 'Save Changes' : 'Save Debt'}
+                    </button>
+                  </form>
                 </div>
-                <form onSubmit={submitDebt} className="space-y-4">
-                  <div>
-                    <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">Customer Name</label>
-                    <input required autoFocus value={debtName} onChange={(e) => setDebtName(e.target.value)} placeholder="Who owes you?" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-amber-300 focus:ring-4 focus:ring-amber-100 outline-none font-semibold" />
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">Phone <span className="text-red-500">*</span></label>
-                      <input
-                        required
-                        type="tel"
-                        maxLength={8}
-                        minLength={8}
-                        value={debtPhone}
-                        onChange={(e) => setDebtPhone(e.target.value.replace(/\D/g, ''))}
-                        placeholder="e.g. 58123456"
-                        className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-amber-300 focus:ring-4 focus:ring-amber-100 outline-none font-semibold"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">Email <span className="text-slate-400 font-normal">(optional)</span></label>
-                      <input type="email" value={debtEmail} onChange={(e) => setDebtEmail(e.target.value)} placeholder="customer@email.com" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-amber-300 focus:ring-4 focus:ring-amber-100 outline-none font-semibold" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">Due Date <span className="text-red-500">*</span></label>
-                    <input required type="date" value={debtDueDate} onChange={(e) => setDebtDueDate(e.target.value)} className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-amber-300 focus:ring-4 focus:ring-amber-100 outline-none font-semibold" />
-                  </div>
-
-                  {businessMode === 'products' && !editingDebtId ? (
-                    <>
-                      <div className="bg-amber-50 rounded-2xl p-4 space-y-3 border border-amber-100">
-                        <label className="text-[10px] font-bold uppercase text-amber-700 tracking-widest">Products Owed</label>
-                        <div className="grid grid-cols-3 gap-2">
-                          <select value={debtProductId} onChange={(e) => setDebtProductId(e.target.value)} className="col-span-2 p-3 bg-white rounded-xl border border-amber-200 text-sm">
-                            <option value="">Select product</option>
-                            {products.map((p) => <option key={p.id} value={p.id} disabled={p.stockQuantity === 0}>{p.name} — {p.stockQuantity} left — M {p.sellingPrice}</option>)}
-                          </select>
-                          <input type="number" min="1" value={debtQty} onChange={(e) => setDebtQty(e.target.value)} placeholder="Qty" className="p-3 bg-white rounded-xl border border-amber-200 text-sm" />
-                        </div>
-                        <button type="button" onClick={addDebtItem} className="w-full py-2.5 bg-amber-500 text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 hover:bg-amber-600"><Plus size={16} /> Add</button>
-                      </div>
-                      {debtItems.length > 0 && (
-                        <div className="bg-white border border-amber-200 rounded-2xl p-3 space-y-2">
-                          {debtItems.map((it) => (
-                            <div key={it.productId} className="flex justify-between items-center p-2 bg-amber-50 rounded-xl">
-                              <div><p className="font-medium text-sm">{it.productName}</p><p className="text-xs text-slate-500">{it.quantity} × M {it.unitPrice}</p></div>
-                              <div className="flex items-center gap-2"><span className="font-bold text-sm tabular-nums">{formatCurrency(it.subtotal)}</span><button type="button" onClick={() => removeDebtItem(it.productId)} className="text-red-500"><X size={16} /></button></div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      <div>
-                        <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">Total Owed</label>
-                        <p className="text-3xl font-bold text-amber-600 tabular-nums">{formatCurrency(debtTotal)}</p>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div>
-                        <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">{editingDebtId ? 'Description / Items' : 'What do they owe you for?'}</label>
-                        <input required value={debtDesc} onChange={(e) => setDebtDesc(e.target.value)} placeholder="E.g., Haircut, Laundry, Loan" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-amber-300 focus:ring-4 focus:ring-amber-100 outline-none font-semibold" />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">Amount (LSL)</label>
-                        <input required type="number" step="0.01" value={debtAmount} onChange={(e) => setDebtAmount(e.target.value)} placeholder="0.00" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-amber-300 focus:ring-4 focus:ring-amber-100 outline-none font-bold text-2xl text-amber-600 tabular-nums" />
-                      </div>
-                    </>
-                  )}
-
-                  <div>
-                    <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">Notes (optional)</label>
-                    <textarea value={debtNotes} onChange={(e) => setDebtNotes(e.target.value)} rows={2} placeholder="E.g. promised to pay Friday" className="w-full mt-1 p-3 bg-slate-50 rounded-xl border border-slate-200 focus:border-amber-300 focus:ring-4 focus:ring-amber-100 outline-none text-sm resize-none" />
-                  </div>
-
-                  {businessMode === 'products' && debtItems.length === 0 && !editingDebtId && (
-                    <p className="text-center text-xs font-semibold text-amber-600 -mt-2">Add at least one product before saving.</p>
-                  )}
-                  <button
-                    type="submit"
-                    disabled={businessMode === 'products' && debtItems.length === 0 && !editingDebtId}
-                    className="w-full bg-amber-500 text-white py-4 rounded-2xl font-bold hover:bg-amber-600 flex items-center justify-center gap-2 disabled:bg-slate-300 disabled:cursor-not-allowed disabled:hover:bg-slate-300"
-                  >
-                    <HandCoins size={18} /> {editingDebtId ? 'Save Changes' : 'Save Debt'}
-                  </button>
-                </form>
               </div>
             </div>
           )}
 
           {expenseModalOpen && (
-            <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-slate-900/50 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) resetExpenseForm(); }}>
-              <div role="dialog" aria-modal="true" className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 md:p-8 shadow-2xl relative">
-                <button onClick={resetExpenseForm} className="absolute right-4 top-4 text-slate-400 hover:text-slate-900 p-2 rounded-xl hover:bg-slate-100" aria-label="Close"><X size={22} /></button>
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="p-2 bg-red-100 rounded-xl"><Receipt size={22} className="text-red-600" /></div>
-                  <div>
-                    <h2 className="text-xl font-bold">Record Expense</h2>
-                    <p className="text-xs text-slate-500">Money going out</p>
-                  </div>
-                </div>
-                <form onSubmit={submitExpense} className="space-y-4">
-                  <div>
-                    <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">What did you spend on?</label>
-                    <input required autoFocus value={expenseDesc} onChange={(e) => setExpenseDesc(e.target.value)} placeholder="E.g., Electricity bill" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-red-300 focus:ring-4 focus:ring-red-100 outline-none font-semibold" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">Category</label>
-                    <div className="grid grid-cols-3 gap-2 mt-1">
-                      {EXPENSE_CATEGORIES.map((cat) => (
-                        <button
-                          key={cat}
-                          type="button"
-                          onClick={() => setExpenseCategory(cat)}
-                          className={`py-2.5 rounded-xl text-[11px] font-bold uppercase border-2 transition-all ${expenseCategory === cat ? 'border-red-600 bg-red-50 text-red-700' : 'border-slate-200 text-slate-400'}`}
-                        >
-                          {cat}
-                        </button>
-                      ))}
+            <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-slate-900/60 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) resetExpenseForm(); }}>
+              <div role="dialog" aria-modal="true" className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl relative overflow-hidden">
+                <div className="h-1.5 w-full bg-gradient-to-r from-teal-500 to-emerald-500" />
+                <div className="p-6 md:p-8">
+                  <button onClick={resetExpenseForm} className="absolute right-4 top-4 text-slate-400 hover:text-slate-900 p-2 rounded-xl hover:bg-slate-100" aria-label="Close"><X size={22} /></button>
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="p-2.5 bg-teal-50 border border-teal-100 rounded-2xl"><Receipt size={22} className="text-teal-600" /></div>
+                    <div>
+                      <h2 className="text-xl font-bold text-slate-900">Record Expense</h2>
+                      <p className="text-xs text-slate-500">Money going out</p>
                     </div>
                   </div>
-                  <div>
-                    <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">Amount (LSL)</label>
-                    <input required type="number" step="0.01" value={expenseAmount} onChange={(e) => setExpenseAmount(e.target.value)} placeholder="0.00" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-red-300 focus:ring-4 focus:ring-red-100 outline-none font-bold text-2xl text-red-600 tabular-nums" />
-                  </div>
-                  <button type="submit" className="w-full bg-red-600 text-white py-4 rounded-2xl font-bold hover:bg-red-700 flex items-center justify-center gap-2">
-                    <CheckCircle2 size={18} /> Save Expense
-                  </button>
-                </form>
+                  <form onSubmit={submitExpense} className="space-y-4">
+                    <div>
+                      <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">What did you spend on?</label>
+                      <input required autoFocus value={expenseDesc} onChange={(e) => setExpenseDesc(e.target.value)} placeholder="E.g., Electricity bill" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-teal-400 focus:ring-4 focus:ring-teal-50 outline-none font-semibold transition-all" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">Category</label>
+                      <div className="grid grid-cols-3 gap-2 mt-1">
+                        {EXPENSE_CATEGORIES.map((cat) => (
+                          <button
+                            key={cat}
+                            type="button"
+                            onClick={() => setExpenseCategory(cat)}
+                            className={`py-2.5 rounded-xl text-[11px] font-bold uppercase border-2 transition-all ${expenseCategory === cat ? 'border-teal-500 bg-teal-50 text-teal-700' : 'border-slate-200 text-slate-400 hover:border-slate-300'}`}
+                          >
+                            {cat}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">Amount (LSL)</label>
+                      <input required type="number" step="0.01" value={expenseAmount} onChange={(e) => setExpenseAmount(e.target.value)} placeholder="0.00" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-teal-400 focus:ring-4 focus:ring-teal-50 outline-none font-bold text-2xl text-teal-600 tabular-nums transition-all" />
+                    </div>
+                    <button type="submit" className="w-full bg-gradient-to-r from-teal-500 to-emerald-600 text-white py-4 rounded-2xl font-bold hover:from-teal-600 hover:to-emerald-700 flex items-center justify-center gap-2 shadow-lg shadow-teal-500/30 transition-all active:scale-[0.99]">
+                      <CheckCircle2 size={18} /> Save Expense
+                    </button>
+                  </form>
+                </div>
               </div>
             </div>
           )}
@@ -1542,8 +1602,8 @@ export default function Dashboard() {
           {inventoryPromptOpen && (
             <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) setInventoryPromptOpen(false); }}>
               <div role="dialog" aria-modal="true" className="bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl text-center">
-                <div className="w-14 h-14 bg-purple-100 rounded-2xl mx-auto flex items-center justify-center mb-4">
-                  <Boxes size={28} className="text-purple-600" />
+                <div className="w-14 h-14 bg-teal-100 rounded-2xl mx-auto flex items-center justify-center mb-4">
+                  <Boxes size={28} className="text-teal-600" />
                 </div>
                 <h2 className="text-xl font-bold text-slate-900 mb-2">No inventory yet</h2>
                 <p className="text-sm text-slate-500 mb-6 leading-relaxed">
@@ -1555,7 +1615,7 @@ export default function Dashboard() {
                       setInventoryPromptOpen(false);
                       setCurrentView('inventory');
                     }}
-                    className="flex-1 py-3 rounded-xl bg-purple-600 text-white font-bold text-sm hover:bg-purple-700 transition active:scale-95"
+                    className="flex-1 py-3 rounded-xl bg-teal-600 text-white font-bold text-sm hover:bg-teal-700 transition active:scale-95"
                   >
                     Add inventory
                   </button>
@@ -1589,11 +1649,11 @@ export default function Dashboard() {
                     {tx.amountPaid ? <div className="flex justify-between text-sm mt-1"><span className="text-slate-600">Already paid</span><span className="font-bold text-emerald-600 tabular-nums">{formatCurrency(tx.amountPaid)}</span></div> : null}
                   </div>
                   <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">Amount to pay (LSL)</label>
-                  <input type="number" step="0.01" autoFocus value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} placeholder="0.00" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-purple-300 focus:ring-4 focus:ring-purple-100 outline-none font-bold text-2xl tabular-nums" />
+                  <input type="number" step="0.01" autoFocus value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} placeholder="0.00" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-teal-300 focus:ring-4 focus:ring-teal-100 outline-none font-bold text-2xl tabular-nums" />
                   <div className="flex gap-2 mt-4">
                     <button onClick={() => setPaymentAmount(remaining.toString())} className="px-3 py-2 text-xs font-semibold bg-slate-100 rounded-lg hover:bg-slate-200">Full: {formatCurrency(remaining)}</button>
                   </div>
-                  <button onClick={() => recordPayment(tx)} className="w-full mt-4 bg-purple-600 text-white py-3 rounded-xl font-bold hover:bg-purple-700 transition-colors">Record Payment</button>
+                  <button onClick={() => recordPayment(tx)} className="w-full mt-4 bg-teal-600 text-white py-3 rounded-xl font-bold hover:bg-teal-700 transition-colors">Record Payment</button>
                 </div>
               </div>
             );
@@ -1614,7 +1674,7 @@ export default function Dashboard() {
               <h2 className="sf-h1">Analytics Dashboard</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="sf-card p-6">
-                  <h3 className="font-bold mb-4 flex items-center gap-2"><TrendingUp size={20} className="text-purple-600" /> Revenue Overview</h3>
+                  <h3 className="font-bold mb-4 flex items-center gap-2"><TrendingUp size={20} className="text-teal-600" /> Revenue Overview</h3>
                   <div className="space-y-3 text-sm">
                     <div className="flex justify-between"><span className="text-slate-600">Total Revenue</span><span className="font-bold tabular-nums">{formatCurrency(stats.totalRevenue)}</span></div>
                     <div className="flex justify-between"><span className="text-slate-600">Average Sale</span><span className="font-bold tabular-nums">{formatCurrency(stats.totalRevenue / (sales.length || 1))}</span></div>
@@ -1623,7 +1683,7 @@ export default function Dashboard() {
                   </div>
                 </div>
                 <div className="sf-card p-6">
-                  <h3 className="font-bold mb-4 flex items-center gap-2"><Wallet size={20} className="text-purple-600" /> Payment Methods</h3>
+                  <h3 className="font-bold mb-4 flex items-center gap-2"><Wallet size={20} className="text-teal-600" /> Payment Methods</h3>
                   <div className="space-y-3">
                     <div className="flex justify-between text-sm items-center"><span className="flex items-center gap-2"><div className="bg-white rounded px-1 border border-slate-200"><img src={MpesaLogo} alt="M-Pesa" className="h-4 w-auto" /></div>M-Pesa</span><span className="font-bold tabular-nums">{formatCurrency(stats.mpesaVolume)}</span></div>
                     <div className="flex justify-between text-sm items-center"><span className="flex items-center gap-2"><div className="bg-white rounded px-1 border border-slate-200"><img src={EcocashLogo} alt="EcoCash" className="h-4 w-auto" /></div>EcoCash</span><span className="font-bold tabular-nums">{formatCurrency(stats.ecocashVolume)}</span></div>
@@ -1633,7 +1693,7 @@ export default function Dashboard() {
                 </div>
               </div>
               <div className="sf-card p-6">
-                <h3 className="font-bold mb-4 flex items-center gap-2"><Package size={20} className="text-purple-600" /> {businessMode === 'products' ? 'Top Selling Products' : 'Top Services'}</h3>
+                <h3 className="font-bold mb-4 flex items-center gap-2"><Package size={20} className="text-teal-600" /> {businessMode === 'products' ? 'Top Selling Products' : 'Top Services'}</h3>
                 {productAnalytics.topProducts.length === 0 ? (
                   <div className="text-center py-8">
                     <div className="mx-auto h-14 w-14 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 ring-4 ring-white shadow-sm flex items-center justify-center mb-3"><Package size={24} className="text-slate-400" /></div>
@@ -1644,10 +1704,10 @@ export default function Dashboard() {
                     {productAnalytics.topProducts.map((p, i) => (
                       <div key={p.name} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl">
                         <div className="flex items-center gap-3">
-                          <span className="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center text-purple-600 font-bold text-xs">{i + 1}</span>
+                          <span className="w-6 h-6 bg-teal-100 rounded-full flex items-center justify-center text-teal-600 font-bold text-xs">{i + 1}</span>
                           <div><p className="font-medium text-sm">{p.name}</p><p className="text-xs text-slate-400">{p.sales} sale(s)</p></div>
                         </div>
-                        <span className="font-bold text-purple-600 tabular-nums">{formatCurrency(p.revenue)}</span>
+                        <span className="font-bold text-teal-600 tabular-nums">{formatCurrency(p.revenue)}</span>
                       </div>
                     ))}
                   </div>
@@ -1658,7 +1718,7 @@ export default function Dashboard() {
 
           {currentView === 'wallet' && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="relative overflow-hidden bg-gradient-to-br from-purple-600 to-purple-800 rounded-3xl p-8 text-white shadow-lg">
+              <div className="relative overflow-hidden bg-gradient-to-br from-teal-600 to-teal-800 rounded-3xl p-8 text-white shadow-lg">
                 <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 mix-blend-overlay pointer-events-none" />
                 <div className="relative z-10">
                   <p className="text-sm opacity-80 mb-2">Available Balance</p>
@@ -1670,7 +1730,7 @@ export default function Dashboard() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="sf-card p-4"><TrendingUp className="text-emerald-600 mb-2" size={24} /><p className="text-2xl font-bold tabular-nums">{formatCurrency(dailyStats.revenue)}</p><p className="text-xs text-slate-500">Today's revenue</p></div>
                 <div className="sf-card p-4"><Receipt className="text-red-600 mb-2" size={24} /><p className="text-2xl font-bold tabular-nums">{formatCurrency(dailyStats.expenses)}</p><p className="text-xs text-slate-500">Today's expenses</p></div>
-                <div className="sf-card p-4"><Wallet className="text-purple-600 mb-2" size={24} /><p className="text-2xl font-bold tabular-nums">{formatCurrency(dailyStats.profit)}</p><p className="text-xs text-slate-500">Today's profit</p></div>
+                <div className="sf-card p-4"><Wallet className="text-teal-600 mb-2" size={24} /><p className="text-2xl font-bold tabular-nums">{formatCurrency(dailyStats.profit)}</p><p className="text-xs text-slate-500">Today's profit</p></div>
               </div>
             </div>
           )}
@@ -1679,12 +1739,12 @@ export default function Dashboard() {
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="sf-card p-8">
                 <div className="flex flex-col md:flex-row items-center gap-6">
-                  <div className="w-24 h-24 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg"><User size={48} className="text-white" /></div>
+                  <div className="w-24 h-24 bg-gradient-to-br from-teal-500 to-teal-600 rounded-full flex items-center justify-center shadow-lg"><User size={48} className="text-white" /></div>
                   <div className="text-center md:text-left flex-1">
                     <h2 className="text-2xl font-bold">{profileForm.businessName || 'Merchant User'}</h2>
                     <p className="text-slate-500">{localStorage.getItem('khotsopay_user_email') || 'merchant@sme.ls'}</p>
                     <div className="flex flex-wrap gap-2 mt-3 justify-center md:justify-start">
-                      <span className="inline-flex items-center gap-1 px-3 py-1 bg-purple-100 text-purple-700 text-xs font-bold rounded-full"><ShieldCheck size={12} /> {modeLabel(businessMode)} business</span>
+                      <span className="inline-flex items-center gap-1 px-3 py-1 bg-teal-100 text-teal-700 text-xs font-bold rounded-full"><ShieldCheck size={12} /> {modeLabel(businessMode)} business</span>
                       <span className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-100 text-emerald-700 text-xs font-bold rounded-full"><CheckCircle2 size={12} /> Active</span>
                     </div>
                   </div>
@@ -1711,7 +1771,7 @@ export default function Dashboard() {
               <div className="sf-card p-6">
                 <div className="flex justify-between items-center mb-6">
                   <h3 className="text-xl font-bold">Personal Information</h3>
-                  <button onClick={() => setIsEditing(!isEditing)} className="flex items-center gap-2 bg-purple-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-purple-700 transition-colors">
+                  <button onClick={() => setIsEditing(!isEditing)} className="flex items-center gap-2 bg-teal-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-teal-700 transition-colors">
                     {isEditing ? <X size={16} /> : <Edit3 size={16} />}{isEditing ? 'Cancel' : 'Edit'}
                   </button>
                 </div>
@@ -1736,7 +1796,7 @@ export default function Dashboard() {
                 </div>
                 {isEditing && (
                   <div className="flex gap-3 mt-6 pt-4 border-t">
-                    <button onClick={handleSaveProfile} className="flex-1 bg-purple-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-purple-700 transition-colors"><Save size={18} /> Save</button>
+                    <button onClick={handleSaveProfile} className="flex-1 bg-teal-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-teal-700 transition-colors"><Save size={18} /> Save</button>
                     <button onClick={() => { setIsEditing(false); loadProfileData(); }} className="flex-1 bg-slate-100 text-slate-600 py-3 rounded-xl font-bold hover:bg-slate-200 transition-colors">Cancel</button>
                   </div>
                 )}
@@ -1748,7 +1808,7 @@ export default function Dashboard() {
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
               <h2 className="sf-h1">Settings</h2>
               <div className="sf-card p-6">
-                <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Bell size={20} className="text-purple-600" /> Notifications</h3>
+                <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Bell size={20} className="text-teal-600" /> Notifications</h3>
                 <div className="space-y-4">
                   {(['emailAlerts', 'dailyReport'] as const).map((key) => (
                     <label key={key} className="flex items-center justify-between cursor-pointer">
@@ -1756,7 +1816,7 @@ export default function Dashboard() {
                         <p className="font-medium">{key === 'emailAlerts' ? 'Email Alerts' : 'Daily Report'}</p>
                         <p className="text-xs text-slate-500">{key === 'emailAlerts' ? 'Receive transaction alerts' : 'Receive daily summary'}</p>
                       </div>
-                      <button onClick={() => { const v = !notifications[key]; setNotifications({ ...notifications, [key]: v }); localStorage.setItem(`khotsopay_${key}`, String(v)); }} className={`w-12 h-6 rounded-full relative transition-colors ${notifications[key] ? 'bg-purple-600' : 'bg-slate-300'}`}>
+                      <button onClick={() => { const v = !notifications[key]; setNotifications({ ...notifications, [key]: v }); localStorage.setItem(`khotsopay_${key}`, String(v)); }} className={`w-12 h-6 rounded-full relative transition-colors ${notifications[key] ? 'bg-teal-600' : 'bg-slate-300'}`}>
                         <span className={`absolute top-0.5 h-5 w-5 bg-white rounded-full transition-all ${notifications[key] ? 'left-6' : 'left-0.5'}`} />
                       </button>
                     </label>
@@ -1764,7 +1824,7 @@ export default function Dashboard() {
                 </div>
               </div>
               <div className="sf-card p-6">
-                <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Settings size={20} className="text-purple-600" /> Preferences</h3>
+                <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Settings size={20} className="text-teal-600" /> Preferences</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-bold mb-2">Language</label>
@@ -1794,7 +1854,7 @@ export default function Dashboard() {
               </div>
 
               <div className="sf-card p-6">
-                <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Scale size={20} className="text-purple-600" /> Legal & Compliance</h3>
+                <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Scale size={20} className="text-teal-600" /> Legal & Compliance</h3>
                 <p className="text-sm text-slate-500 mb-4">
                   Read our Terms, Privacy Policy, and learn about your tax and consumer-protection obligations in Lesotho.
                 </p>
@@ -1807,15 +1867,60 @@ export default function Dashboard() {
                   </button>
                   <button
                     onClick={() => setHelpCenterOpen(true)}
-                    className="py-3 bg-purple-50 text-purple-700 rounded-xl font-bold text-sm hover:bg-purple-100 flex items-center justify-center gap-2 transition-colors"
+                    className="py-3 bg-teal-50 text-teal-700 rounded-xl font-bold text-sm hover:bg-teal-100 flex items-center justify-center gap-2 transition-colors"
                   >
                     <BookOpen size={16} /> Open Help Center
                   </button>
                 </div>
               </div>
 
+              {/* Rate this App */}
+              <div className="sf-card p-6 border-teal-100 bg-gradient-to-br from-white to-teal-50/30">
+                <h3 className="font-bold text-lg mb-2 flex items-center gap-2">
+                  <Star size={20} className="text-amber-500" /> Rate this App
+                </h3>
+                <p className="text-sm text-slate-500 mb-4">How has SME Finance helped your business?</p>
+                
+                <div className="flex gap-2">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      onClick={() => handleRate(star)}
+                      className={`p-2 rounded-xl transition-all ${
+                        ratingValue >= star
+                          ? 'text-amber-500 bg-amber-50'
+                          : 'text-slate-300 hover:text-amber-400 hover:bg-amber-50'
+                      }`}
+                    >
+                      <Star size={32} fill={ratingValue >= star ? "currentColor" : "none"} />
+                    </button>
+                  ))}
+                </div>
+                {ratingValue > 0 && (
+                  <p className="text-xs text-emerald-600 mt-3 font-semibold">
+                    You rated us {ratingValue} out of 5 stars. Thank you!
+                  </p>
+                )}
+              </div>
+
+              {/* Feedback & Bug Reporting */}
+              <div className="sf-card p-6 border-teal-100 bg-gradient-to-br from-white to-teal-50/30">
+                <h3 className="font-bold text-lg mb-2 flex items-center gap-2">
+                  <MessageSquarePlus size={20} className="text-teal-600" /> Help us improve
+                </h3>
+                <p className="text-sm text-slate-500 mb-4">
+                  Found a bug? Or have an idea for a new feature? Let us know so we can make SME Finance better for you.
+                </p>
+                <button
+                  onClick={() => setFeedbackModalOpen(true)}
+                  className="w-full py-3 bg-white border border-teal-200 text-teal-700 rounded-xl font-bold text-sm hover:bg-teal-50 flex items-center justify-center gap-2 transition-colors shadow-sm"
+                >
+                  <Bug size={16} /> Report an Issue or Request a Feature
+                </button>
+              </div>
+
               <div className="sf-card p-6">
-                <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><ShieldCheck size={20} className="text-purple-600" /> Data Management</h3>
+                <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><ShieldCheck size={20} className="text-teal-600" /> Data Management</h3>
                 <div className="space-y-3">
                   <button onClick={exportToExcel} className="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 flex items-center justify-center gap-2 transition-colors"><FileText size={16} /> Export to Excel</button>
                   <button onClick={exportToCSV} className="w-full py-3 bg-slate-100 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-200 flex items-center justify-center gap-2 transition-colors"><Download size={16} /> Export to CSV</button>
@@ -1840,28 +1945,28 @@ export default function Dashboard() {
               >
                 <button
                   onClick={() => setLegalGuideOpen(true)}
-                  className="hover:text-purple-600 transition-colors hover:underline underline-offset-2"
+                  className="hover:text-teal-600 transition-colors hover:underline underline-offset-2"
                 >
                   Legal Guide
                 </button>
                 <span className="text-slate-300">·</span>
                 <button
                   onClick={() => setLegalGuideOpen(true)}
-                  className="hover:text-purple-600 transition-colors hover:underline underline-offset-2"
+                  className="hover:text-teal-600 transition-colors hover:underline underline-offset-2"
                 >
                   Privacy
                 </button>
                 <span className="text-slate-300">·</span>
                 <button
                   onClick={() => setLegalGuideOpen(true)}
-                  className="hover:text-purple-600 transition-colors hover:underline underline-offset-2"
+                  className="hover:text-teal-600 transition-colors hover:underline underline-offset-2"
                 >
                   Terms
                 </button>
                 <span className="text-slate-300">·</span>
                 <button
                   onClick={() => setHelpCenterOpen(true)}
-                  className="hover:text-purple-600 transition-colors hover:underline underline-offset-2 flex items-center gap-1"
+                  className="hover:text-teal-600 transition-colors hover:underline underline-offset-2 flex items-center gap-1"
                 >
                   <HelpCircle size={12} /> Help Center
                 </button>
@@ -1910,12 +2015,108 @@ export default function Dashboard() {
               </div>
             </div>
           )}
+
+          {/* Auto-Popup Rating Modal */}
+          {ratingModalOpen && (
+            <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) setRatingModalOpen(false); }}>
+              <div role="dialog" aria-modal="true" className="bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl text-center relative">
+                <button onClick={() => setRatingModalOpen(false)} className="absolute right-4 top-4 text-slate-400 hover:text-slate-900 p-2 rounded-xl hover:bg-slate-100" aria-label="Close"><X size={22} /></button>
+                
+                <div className="w-16 h-16 bg-amber-100 rounded-full mx-auto flex items-center justify-center mb-4">
+                  <Star size={32} className="text-amber-500" fill="currentColor" />
+                </div>
+                
+                <h2 className="text-2xl font-bold text-slate-900 mb-2">Enjoying SME Finance?</h2>
+                <p className="text-sm text-slate-500 mb-6">Tap a star to rate your experience. Your feedback helps us improve!</p>
+                
+                <div className="flex justify-center gap-2 mb-6">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      onClick={() => {
+                        handleRate(star);
+                        setTimeout(() => setRatingModalOpen(false), 800); // Close after 0.8s
+                      }}
+                      className={`p-1 transition-all hover:scale-110 ${
+                        ratingValue >= star
+                          ? 'text-amber-500'
+                          : 'text-slate-200 hover:text-amber-400'
+                      }`}
+                    >
+                      <Star size={40} fill={ratingValue >= star ? "currentColor" : "none"} />
+                    </button>
+                  ))}
+                </div>
+
+                <button onClick={() => setRatingModalOpen(false)} className="text-xs font-bold text-slate-400 hover:text-slate-700 uppercase tracking-wider">
+                  Maybe later
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Feedback Modal */}
+          {feedbackModalOpen && (
+            <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-slate-900/50 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) setFeedbackModalOpen(false); }}>
+              <div role="dialog" aria-modal="true" className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 md:p-8 shadow-2xl relative">
+                <button onClick={() => setFeedbackModalOpen(false)} className="absolute right-4 top-4 text-slate-400 hover:text-slate-900 p-2 rounded-xl hover:bg-slate-100" aria-label="Close"><X size={22} /></button>
+                
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 bg-teal-100 rounded-xl"><Bug size={22} className="text-teal-600" /></div>
+                  <div>
+                    <h2 className="text-xl font-bold">Send Feedback</h2>
+                    <p className="text-xs text-slate-500">Help us fix bugs and build new features</p>
+                  </div>
+                </div>
+
+                <form onSubmit={submitFeedback} className="space-y-4">
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setFeedbackType('bug')}
+                      className={`flex-1 py-2.5 rounded-xl text-xs font-bold uppercase border-2 transition-all ${feedbackType === 'bug' ? 'border-teal-500 bg-teal-50 text-teal-700' : 'border-slate-200 text-slate-400'}`}
+                    >
+                      🐛 Report a Bug
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFeedbackType('feature')}
+                      className={`flex-1 py-2.5 rounded-xl text-xs font-bold uppercase border-2 transition-all ${feedbackType === 'feature' ? 'border-teal-500 bg-teal-50 text-teal-700' : 'border-slate-200 text-slate-400'}`}
+                    >
+                      💡 Request a Feature
+                    </button>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">Describe the issue or idea</label>
+                    <textarea
+                      required
+                      autoFocus
+                      rows={4}
+                      value={feedbackText}
+                      onChange={(e) => setFeedbackText(e.target.value)}
+                      placeholder={feedbackType === 'bug' ? "E.g., When I try to record a sale, the app crashes..." : "E.g., I would love a feature that sends automatic WhatsApp reminders to debtors..."}
+                      className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-teal-400 focus:ring-4 focus:ring-teal-50 outline-none text-sm resize-none"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isSubmittingFeedback || !feedbackText.trim()}
+                    className="w-full bg-teal-600 text-white py-4 rounded-2xl font-bold hover:bg-teal-700 flex items-center justify-center gap-2 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {isSubmittingFeedback ? 'Sending...' : <><Send size={18} /> Submit Feedback</>}
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
         </main>
 
         <button
           onClick={() => setAiDrawerOpen(true)}
           aria-label="Open AI Assistant"
-          className="fixed bottom-24 right-4 md:bottom-24 md:right-6 z-40 flex items-center gap-2 bg-gradient-to-br from-purple-600 to-purple-800 text-white px-4 py-3 rounded-full shadow-2xl shadow-purple-500/40 hover:shadow-purple-500/60 hover:scale-105 active:scale-95 transition-all group"
+          className="fixed bottom-24 right-4 md:bottom-24 md:right-6 z-40 flex items-center gap-2 bg-gradient-to-br from-teal-600 to-teal-800 text-white px-4 py-3 rounded-full shadow-2xl shadow-teal-500/40 hover:shadow-teal-500/60 hover:scale-105 active:scale-95 transition-all group"
         >
           <Bot size={20} className="group-hover:rotate-12 transition-transform" />
           <span className="hidden md:inline text-sm font-bold">Ask AI</span>
@@ -1930,8 +2131,8 @@ export default function Dashboard() {
             <aside className="fixed top-0 right-0 bottom-0 z-[90] w-full sm:w-[480px] bg-slate-50 shadow-2xl flex flex-col">
               <div className="flex items-center justify-between px-4 py-3 bg-white border-b border-slate-200">
                 <div className="flex items-center gap-2">
-                  <div className="p-1.5 bg-purple-100 rounded-lg">
-                    <Bot size={16} className="text-purple-700" />
+                  <div className="p-1.5 bg-teal-100 rounded-lg">
+                    <Bot size={16} className="text-teal-700" />
                   </div>
                   <p className="text-sm font-bold text-slate-900">AI Assistant</p>
                 </div>
