@@ -36,7 +36,7 @@ import {
 import { formatCurrency } from '../utils/formatters';
 import {
   auth,
-  db, // Ensure db is exported from your firebase.ts
+  db,
   subscribeToTransactions,
   createTransaction,
   editTransaction,
@@ -101,7 +101,6 @@ export default function Dashboard() {
   const [ledgerTab, setLedgerTab] = useState<LedgerTab>('sales');
   const [searchTerm, setSearchTerm] = useState<string>('');
 
-  // --- EDITING STATES ---
   const [editingSaleId, setEditingSaleId] = useState<string | null>(null);
   const [editingDebtId, setEditingDebtId] = useState<string | null>(null);
 
@@ -116,7 +115,6 @@ export default function Dashboard() {
   const [legalGuideOpen, setLegalGuideOpen] = useState(false);
   const [helpCenterOpen, setHelpCenterOpen] = useState(false);
 
-  // --- RATING & FEEDBACK STATES ---
   const [ratingValue, setRatingValue] = useState(() => Number(localStorage.getItem('khotsopay_rating')) || 0);
   const [ratingModalOpen, setRatingModalOpen] = useState(false);
   const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
@@ -124,7 +122,6 @@ export default function Dashboard() {
   const [feedbackText, setFeedbackText] = useState('');
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
 
-  // Sale form
   const [saleName, setSaleName] = useState('');
   const [saleItems, setSaleItems] = useState<SaleItem[]>([]);
   const [saleProductId, setSaleProductId] = useState('');
@@ -133,7 +130,6 @@ export default function Dashboard() {
   const [saleDesc, setSaleDesc] = useState('');
   const [saleAmount, setSaleAmount] = useState('');
 
-  // Debt form
   const [debtName, setDebtName] = useState('');
   const [debtPhone, setDebtPhone] = useState('');
   const [debtEmail, setDebtEmail] = useState('');
@@ -145,7 +141,6 @@ export default function Dashboard() {
   const [debtDesc, setDebtDesc] = useState('');
   const [debtAmount, setDebtAmount] = useState('');
 
-  // Expense form
   const [expenseDesc, setExpenseDesc] = useState('');
   const [expenseAmount, setExpenseAmount] = useState('');
   const [expenseCategory, setExpenseCategory] = useState<string>('Utilities');
@@ -255,18 +250,16 @@ export default function Dashboard() {
     };
   }, []);
 
-  // Auto-popup rating modal after 8 seconds if not rated
   useEffect(() => {
     const hasRated = localStorage.getItem('khotsopay_rating');
-    if (!hasRated && user && businessMode && !checkingAuth) { 
+    if (!hasRated && user && businessMode && !checkingAuth) {
       const timer = setTimeout(() => {
         setRatingModalOpen(true);
-      }, 8000); // 8 seconds
+      }, 8000);
       return () => clearTimeout(timer);
     }
   }, [user, businessMode, checkingAuth]);
 
-  // ---- Derived lists ----
   const sales = useMemo(
     () => (allTransactions || []).filter((t) => t.status === 'Completed' && t.type !== 'expense'),
     [allTransactions]
@@ -424,7 +417,7 @@ export default function Dashboard() {
       return;
     }
     resetSaleForm();
-    
+
     if (tx) {
       setEditingSaleId(tx.id);
       setSaleName(tx.name);
@@ -437,9 +430,9 @@ export default function Dashboard() {
     setSaleModalOpen(true);
   };
 
-  const openDebtModal = (tx?: Transaction) => { 
-    resetDebtForm(); 
-    
+  const openDebtModal = (tx?: Transaction) => {
+    resetDebtForm();
+
     if (tx) {
       setEditingDebtId(tx.id);
       setDebtName(tx.name);
@@ -452,7 +445,7 @@ export default function Dashboard() {
         setDebtDesc(tx.items || '');
       }
     }
-    setDebtModalOpen(true); 
+    setDebtModalOpen(true);
   };
 
   const openExpenseModal = () => { resetExpenseForm(); setExpenseModalOpen(true); };
@@ -491,7 +484,7 @@ export default function Dashboard() {
   const debtTotal = businessMode === 'products' && !editingDebtId
     ? debtItems.reduce((s, i) => s + i.subtotal, 0)
     : parseFloat(debtAmount) || 0;
-  
+
   const saleItemsText = businessMode === 'products' && !editingSaleId
     ? saleItems.map((i) => `${i.quantity}x ${i.productName}`).join(', ')
     : saleDesc.trim();
@@ -502,7 +495,7 @@ export default function Dashboard() {
   const submitSale = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !businessMode) return;
-    
+
     if (businessMode === 'products' && !editingSaleId && saleItems.length === 0) {
       alert('Add at least one product.'); return;
     }
@@ -539,10 +532,12 @@ export default function Dashboard() {
     }
   };
 
+  // ✅ FIXED: Send empty strings ('' ) instead of undefined for notes and customerEmail.
+  // Firestore rejects "undefined" values with "Unsupported field value: undefined".
   const submitDebt = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !businessMode) return;
-    
+
     if (businessMode === 'products' && !editingDebtId && debtItems.length === 0) {
       alert('Add at least one product.'); return;
     }
@@ -565,8 +560,9 @@ export default function Dashboard() {
         amount: debtTotal,
         customerPhone: cleanPhone,
         dueDate: debtDueDate,
-        customerEmail: debtEmail.trim() || undefined,
-        notes: debtNotes.trim() || undefined
+        // ✅ Always send a string (empty string when not provided) — never undefined
+        customerEmail: debtEmail.trim(),
+        notes: debtNotes.trim(),
       };
 
       if (editingDebtId) {
@@ -584,11 +580,11 @@ export default function Dashboard() {
         });
         if (businessMode === 'products') await deductStock(debtItems);
       }
-      resetDebtForm();
-    } catch (err) {
-      console.error(err);
-      alert('Failed to save debt.');
-    }
+    } catch (err: unknown) {
+  console.error('Debt save error:', err);
+  const message = err instanceof Error ? err.message : 'Unknown error';
+  alert(`Failed to save debt: ${message}. Check the browser console for details.`);
+}
   };
 
   const submitExpense = async (e: React.FormEvent) => {
@@ -714,7 +710,7 @@ export default function Dashboard() {
       setFeedbackModalOpen(false);
       setFeedbackText('');
     } catch (error) {
-      console.error("Firestore error, falling back to email:", error);
+      console.error('Firestore error, falling back to email:', error);
       const subject = encodeURIComponent(`[${feedbackType.toUpperCase()}] SME Finance Feedback`);
       const body = encodeURIComponent(`User: ${user?.email || 'Anonymous'}\n\nMessage:\n${feedbackText}`);
       window.location.href = `mailto:support@smefinance.ls?subject=${subject}&body=${body}`;
@@ -847,7 +843,7 @@ export default function Dashboard() {
   return (
     <HelmetProvider>
       <div className="relative flex flex-col md:flex-row min-h-screen bg-slate-50 text-slate-900 antialiased font-sans overflow-hidden">
-        
+
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-gradient-to-br from-teal-200/40 via-blue-100/30 to-transparent blur-3xl -z-10 pointer-events-none rounded-full" />
 
         <SEO view={currentView} />
@@ -912,11 +908,11 @@ export default function Dashboard() {
 
           {currentView === 'dashboard' && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              
+
               <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-900 to-teal-900 p-6 md:p-10 shadow-xl border border-slate-800">
                 <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 mix-blend-overlay pointer-events-none" />
                 <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-teal-500/20 blur-3xl" />
-                
+
                 <div className="relative z-10 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8">
                   <div className="space-y-3">
                     <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-white/90 border border-white/10 backdrop-blur-sm">
@@ -926,36 +922,35 @@ export default function Dashboard() {
                     <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-white">{t('lumela')}, welcome back.</h1>
                     <p className="text-slate-300 text-base max-w-md">{t('manageBusiness')}</p>
                   </div>
-                  
-                  {/* THE 3 ORIGINAL BUTTONS WITH PREMIUM HOVER EFFECTS */}
+
                   <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
                     {allowsSales(businessMode) && (
-                      <button 
-                        onClick={() => openSaleModal()} 
+                      <button
+                        onClick={() => openSaleModal()}
                         className="group flex items-center justify-center gap-2 bg-white text-slate-900 px-5 py-3.5 rounded-2xl font-semibold shadow-lg shadow-black/10 hover:shadow-2xl hover:shadow-white/20 hover:bg-slate-50 hover:-translate-y-1 transition-all duration-300 active:scale-95"
                       >
                         <Plus size={18} className="group-hover:rotate-90 transition-transform duration-300" />
                         <span>Record Sale</span>
                       </button>
                     )}
-                    
-                    <button 
-                      onClick={() => openDebtModal()} 
+
+                    <button
+                      onClick={() => openDebtModal()}
                       className="group flex items-center justify-center gap-2 bg-amber-500 text-white px-5 py-3.5 rounded-2xl font-semibold shadow-lg shadow-amber-500/20 hover:shadow-2xl hover:shadow-amber-500/40 hover:bg-amber-400 hover:-translate-y-1 transition-all duration-300 active:scale-95"
                     >
                       <HandCoins size={18} className="group-hover:-translate-y-1 transition-transform duration-300" />
                       <span>Record Debt</span>
                     </button>
-                    
-                    <button 
-                      onClick={openExpenseModal} 
+
+                    <button
+                      onClick={openExpenseModal}
                       className="group flex items-center justify-center gap-2 bg-slate-700 text-white px-5 py-3.5 rounded-2xl font-semibold shadow-lg shadow-slate-700/20 hover:shadow-2xl hover:shadow-slate-700/40 hover:bg-slate-600 hover:-translate-y-1 transition-all duration-300 active:scale-95"
                     >
                       <Receipt size={18} className="group-hover:rotate-12 transition-transform duration-300" />
                       <span>Record Expense</span>
                     </button>
                   </div>
-                  
+
                 </div>
               </section>
 
@@ -1874,13 +1869,12 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* Rate this App */}
               <div className="sf-card p-6 border-teal-100 bg-gradient-to-br from-white to-teal-50/30">
                 <h3 className="font-bold text-lg mb-2 flex items-center gap-2">
                   <Star size={20} className="text-amber-500" /> Rate this App
                 </h3>
                 <p className="text-sm text-slate-500 mb-4">How has SME Finance helped your business?</p>
-                
+
                 <div className="flex gap-2">
                   {[1, 2, 3, 4, 5].map((star) => (
                     <button
@@ -1892,7 +1886,7 @@ export default function Dashboard() {
                           : 'text-slate-300 hover:text-amber-400 hover:bg-amber-50'
                       }`}
                     >
-                      <Star size={32} fill={ratingValue >= star ? "currentColor" : "none"} />
+                      <Star size={32} fill={ratingValue >= star ? 'currentColor' : 'none'} />
                     </button>
                   ))}
                 </div>
@@ -1903,7 +1897,6 @@ export default function Dashboard() {
                 )}
               </div>
 
-              {/* Feedback & Bug Reporting */}
               <div className="sf-card p-6 border-teal-100 bg-gradient-to-br from-white to-teal-50/30">
                 <h3 className="font-bold text-lg mb-2 flex items-center gap-2">
                   <MessageSquarePlus size={20} className="text-teal-600" /> Help us improve
@@ -1932,7 +1925,7 @@ export default function Dashboard() {
           <footer className="mt-16 pt-8 border-t border-slate-200 pb-8">
             <div className="flex flex-col md:flex-row justify-between items-center gap-6">
               <div className="flex items-center gap-3">
-            <Logo size="sm" />
+                <Logo size="sm" />
                 <div>
                   <p className="text-sm font-bold leading-none">SME Finance</p>
                   <p className="text-[10px] font-medium text-slate-500 mt-1">Merchant Suite · {modeLabel(businessMode)}</p>
@@ -1982,7 +1975,6 @@ export default function Dashboard() {
             </p>
           </footer>
 
-          {/* Legal Guide Modal */}
           {legalGuideOpen && (
             <div
               className="fixed inset-0 z-[85] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-slate-900/50 backdrop-blur-sm"
@@ -1996,7 +1988,6 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Help Center Modal */}
           {helpCenterOpen && (
             <div
               className="fixed inset-0 z-[85] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-slate-900/50 backdrop-blur-sm"
@@ -2016,26 +2007,25 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Auto-Popup Rating Modal */}
           {ratingModalOpen && (
             <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) setRatingModalOpen(false); }}>
               <div role="dialog" aria-modal="true" className="bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl text-center relative">
                 <button onClick={() => setRatingModalOpen(false)} className="absolute right-4 top-4 text-slate-400 hover:text-slate-900 p-2 rounded-xl hover:bg-slate-100" aria-label="Close"><X size={22} /></button>
-                
+
                 <div className="w-16 h-16 bg-amber-100 rounded-full mx-auto flex items-center justify-center mb-4">
                   <Star size={32} className="text-amber-500" fill="currentColor" />
                 </div>
-                
+
                 <h2 className="text-2xl font-bold text-slate-900 mb-2">Enjoying SME Finance?</h2>
                 <p className="text-sm text-slate-500 mb-6">Tap a star to rate your experience. Your feedback helps us improve!</p>
-                
+
                 <div className="flex justify-center gap-2 mb-6">
                   {[1, 2, 3, 4, 5].map((star) => (
                     <button
                       key={star}
                       onClick={() => {
                         handleRate(star);
-                        setTimeout(() => setRatingModalOpen(false), 800); // Close after 0.8s
+                        setTimeout(() => setRatingModalOpen(false), 800);
                       }}
                       className={`p-1 transition-all hover:scale-110 ${
                         ratingValue >= star
@@ -2043,7 +2033,7 @@ export default function Dashboard() {
                           : 'text-slate-200 hover:text-amber-400'
                       }`}
                     >
-                      <Star size={40} fill={ratingValue >= star ? "currentColor" : "none"} />
+                      <Star size={40} fill={ratingValue >= star ? 'currentColor' : 'none'} />
                     </button>
                   ))}
                 </div>
@@ -2055,12 +2045,11 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Feedback Modal */}
           {feedbackModalOpen && (
             <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-slate-900/50 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) setFeedbackModalOpen(false); }}>
               <div role="dialog" aria-modal="true" className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 md:p-8 shadow-2xl relative">
                 <button onClick={() => setFeedbackModalOpen(false)} className="absolute right-4 top-4 text-slate-400 hover:text-slate-900 p-2 rounded-xl hover:bg-slate-100" aria-label="Close"><X size={22} /></button>
-                
+
                 <div className="flex items-center gap-3 mb-6">
                   <div className="p-2 bg-teal-100 rounded-xl"><Bug size={22} className="text-teal-600" /></div>
                   <div>
