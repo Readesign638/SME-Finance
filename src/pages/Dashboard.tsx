@@ -532,8 +532,7 @@ export default function Dashboard() {
     }
   };
 
-  // ✅ FIXED: Send empty strings ('' ) instead of undefined for notes and customerEmail.
-  // Firestore rejects "undefined" values with "Unsupported field value: undefined".
+  // ✅ FIXED: Always send empty strings for notes/email (never undefined) + resetDebtForm() on success
   const submitDebt = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !businessMode) return;
@@ -560,7 +559,6 @@ export default function Dashboard() {
         amount: debtTotal,
         customerPhone: cleanPhone,
         dueDate: debtDueDate,
-        // ✅ Always send a string (empty string when not provided) — never undefined
         customerEmail: debtEmail.trim(),
         notes: debtNotes.trim(),
       };
@@ -580,11 +578,13 @@ export default function Dashboard() {
         });
         if (businessMode === 'products') await deductStock(debtItems);
       }
+      // ✅ Added: Close modal + clear form on success (this was missing!)
+      resetDebtForm();
     } catch (err: unknown) {
-  console.error('Debt save error:', err);
-  const message = err instanceof Error ? err.message : 'Unknown error';
-  alert(`Failed to save debt: ${message}. Check the browser console for details.`);
-}
+      console.error('Debt save error:', err);
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      alert(`Failed to save debt: ${message}. Check the browser console for details.`);
+    }
   };
 
   const submitExpense = async (e: React.FormEvent) => {
@@ -1469,12 +1469,12 @@ export default function Dashboard() {
                   <form onSubmit={submitDebt} className="space-y-4">
                     <div>
                       <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">Customer Name</label>
-                      <input required autoFocus value={debtName} onChange={(e) => setDebtName(e.target.value)} placeholder="Who owes you?" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-teal-400 focus:ring-4 focus:ring-teal-50 outline-none font-semibold transition-all" />
+                      <input autoFocus value={debtName} onChange={(e) => setDebtName(e.target.value)} placeholder="Who owes you?" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-teal-400 focus:ring-4 focus:ring-teal-50 outline-none font-semibold transition-all" />
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">Phone <span className="text-rose-500">*</span></label>
-                        <input required type="tel" maxLength={8} minLength={8} value={debtPhone} onChange={(e) => setDebtPhone(e.target.value.replace(/\D/g, ''))} placeholder="e.g. 58123456" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-teal-400 focus:ring-4 focus:ring-teal-50 outline-none font-semibold transition-all" />
+                        <input type="tel" value={debtPhone} onChange={(e) => setDebtPhone(e.target.value.replace(/\D/g, '').slice(0, 8))} placeholder="e.g. 58123456" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-teal-400 focus:ring-4 focus:ring-teal-50 outline-none font-semibold transition-all" />
                       </div>
                       <div>
                         <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">Email <span className="text-slate-400 font-normal">(optional)</span></label>
@@ -1483,7 +1483,7 @@ export default function Dashboard() {
                     </div>
                     <div>
                       <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">Due Date <span className="text-rose-500">*</span></label>
-                      <input required type="date" value={debtDueDate} onChange={(e) => setDebtDueDate(e.target.value)} className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-teal-400 focus:ring-4 focus:ring-teal-50 outline-none font-semibold transition-all" />
+                      <input type="date" value={debtDueDate} onChange={(e) => setDebtDueDate(e.target.value)} className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-teal-400 focus:ring-4 focus:ring-teal-50 outline-none font-semibold transition-all" />
                     </div>
 
                     {businessMode === 'products' && !editingDebtId ? (
@@ -1518,11 +1518,11 @@ export default function Dashboard() {
                       <>
                         <div>
                           <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">{editingDebtId ? 'Description / Items' : 'What do they owe you for?'}</label>
-                          <input required value={debtDesc} onChange={(e) => setDebtDesc(e.target.value)} placeholder="E.g., Haircut, Laundry, Loan" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-teal-400 focus:ring-4 focus:ring-teal-50 outline-none font-semibold transition-all" />
+                          <input value={debtDesc} onChange={(e) => setDebtDesc(e.target.value)} placeholder="E.g., Haircut, Laundry, Loan" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-teal-400 focus:ring-4 focus:ring-teal-50 outline-none font-semibold transition-all" />
                         </div>
                         <div>
                           <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">Amount (LSL)</label>
-                          <input required type="number" step="0.01" value={debtAmount} onChange={(e) => setDebtAmount(e.target.value)} placeholder="0.00" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-teal-400 focus:ring-4 focus:ring-teal-50 outline-none font-bold text-2xl text-teal-600 tabular-nums transition-all" />
+                          <input type="number" step="0.01" value={debtAmount} onChange={(e) => setDebtAmount(e.target.value)} placeholder="0.00" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-teal-400 focus:ring-4 focus:ring-teal-50 outline-none font-bold text-2xl text-teal-600 tabular-nums transition-all" />
                         </div>
                       </>
                     )}
