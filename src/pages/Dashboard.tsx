@@ -423,9 +423,8 @@ export default function Dashboard() {
       setSaleName(tx.name);
       setSaleMethod(tx.method);
       setSaleAmount(tx.amount.toString());
-      if (tx.type === 'sale' && businessMode !== 'products') {
-         setSaleDesc(tx.items || '');
-      }
+      // Always populate description so it isn't blank when editing
+      setSaleDesc(tx.items || '');
     }
     setSaleModalOpen(true);
   };
@@ -441,9 +440,8 @@ export default function Dashboard() {
       setDebtDueDate(tx.dueDate || addDaysISO(7));
       setDebtNotes(tx.notes || '');
       setDebtAmount(tx.amount.toString());
-      if (tx.type === 'debt' && businessMode !== 'products') {
-        setDebtDesc(tx.items || '');
-      }
+      // Always populate description so it isn't blank when editing
+      setDebtDesc(tx.items || '');
     }
     setDebtModalOpen(true);
   };
@@ -492,15 +490,26 @@ export default function Dashboard() {
     ? debtItems.map((i) => `${i.quantity}x ${i.productName}`).join(', ')
     : debtDesc.trim();
 
+  // ✅ FIXED: deducStock wrapped in its own try/catch so a stock failure can't skip resetSaleForm()
   const submitSale = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !businessMode) return;
 
-    if (businessMode === 'products' && !editingSaleId && saleItems.length === 0) {
-      alert('Add at least one product.'); return;
+    if (!saleName.trim()) {
+      alert('Enter the customer name.');
+      return;
     }
-    if (businessMode !== 'products' && !editingSaleId && (!saleDesc.trim() || !saleAmount || parseFloat(saleAmount) <= 0)) {
-      alert('Enter a description and amount.'); return;
+
+    if (businessMode === 'products' && !editingSaleId && saleItems.length === 0) {
+      alert('Add at least one product.');
+      return;
+    }
+    if (businessMode !== 'products') {
+      const amt = parseFloat(saleAmount);
+      if (!saleDesc.trim() || !Number.isFinite(amt) || amt <= 0) {
+        alert('Enter a description and a valid amount.');
+        return;
+      }
     }
 
     const now = new Date();
@@ -523,7 +532,15 @@ export default function Dashboard() {
           date: now.toLocaleDateString('en-LS', { month: 'short', day: 'numeric', year: 'numeric' }),
           time: now.toLocaleTimeString('en-LS', { hour: '2-digit', minute: '2-digit', hour12: false })
         });
-        if (businessMode === 'products') await deductStock(saleItems);
+
+        // Side effect — never let a stock failure block the modal from closing
+        if (businessMode === 'products') {
+          try {
+            await deductStock(saleItems);
+          } catch (stockErr) {
+            console.error('Stock deduction failed (sale already saved):', stockErr);
+          }
+        }
       }
       resetSaleForm();
     } catch (err) {
@@ -532,16 +549,26 @@ export default function Dashboard() {
     }
   };
 
-  // ✅ FIXED: Always send empty strings for notes/email (never undefined) + resetDebtForm() on success
+  // ✅ FIXED: deductStock wrapped in its own try/catch so a stock failure can't skip resetDebtForm()
   const submitDebt = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !businessMode) return;
 
-    if (businessMode === 'products' && !editingDebtId && debtItems.length === 0) {
-      alert('Add at least one product.'); return;
+    if (!debtName.trim()) {
+      alert('Enter the customer name.');
+      return;
     }
-    if (businessMode !== 'products' && (!debtDesc.trim() || !debtAmount || parseFloat(debtAmount) <= 0)) {
-      alert('Enter a description and amount.'); return;
+
+    if (businessMode === 'products' && !editingDebtId && debtItems.length === 0) {
+      alert('Add at least one product.');
+      return;
+    }
+    if (businessMode !== 'products') {
+      const amt = parseFloat(debtAmount);
+      if (!debtDesc.trim() || !Number.isFinite(amt) || amt <= 0) {
+        alert('Enter a description and a valid amount.');
+        return;
+      }
     }
 
     const cleanPhone = debtPhone.trim().replace(/\D/g, '');
@@ -576,9 +603,17 @@ export default function Dashboard() {
           amountPaid: 0,
           remindersSent: 0
         });
-        if (businessMode === 'products') await deductStock(debtItems);
+
+        // Side effect — never let a stock failure block the modal from closing
+        if (businessMode === 'products') {
+          try {
+            await deductStock(debtItems);
+          } catch (stockErr) {
+            console.error('Stock deduction failed (debt already saved):', stockErr);
+          }
+        }
       }
-      // ✅ Added: Close modal + clear form on success (this was missing!)
+      // Always runs after a successful save
       resetDebtForm();
     } catch (err: unknown) {
       console.error('Debt save error:', err);
@@ -1469,7 +1504,7 @@ export default function Dashboard() {
                   <form onSubmit={submitDebt} className="space-y-4">
                     <div>
                       <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">Customer Name</label>
-                      <input autoFocus value={debtName} onChange={(e) => setDebtName(e.target.value)} placeholder="Who owes you?" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-teal-400 focus:ring-4 focus:ring-teal-50 outline-none font-semibold transition-all" />
+                      <input required autoFocus value={debtName} onChange={(e) => setDebtName(e.target.value)} placeholder="Who owes you?" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-teal-400 focus:ring-4 focus:ring-teal-50 outline-none font-semibold transition-all" />
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
@@ -1518,11 +1553,11 @@ export default function Dashboard() {
                       <>
                         <div>
                           <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">{editingDebtId ? 'Description / Items' : 'What do they owe you for?'}</label>
-                          <input value={debtDesc} onChange={(e) => setDebtDesc(e.target.value)} placeholder="E.g., Haircut, Laundry, Loan" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-teal-400 focus:ring-4 focus:ring-teal-50 outline-none font-semibold transition-all" />
+                          <input required value={debtDesc} onChange={(e) => setDebtDesc(e.target.value)} placeholder="E.g., Haircut, Laundry, Loan" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-teal-400 focus:ring-4 focus:ring-teal-50 outline-none font-semibold transition-all" />
                         </div>
                         <div>
                           <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1">Amount (LSL)</label>
-                          <input type="number" step="0.01" value={debtAmount} onChange={(e) => setDebtAmount(e.target.value)} placeholder="0.00" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-teal-400 focus:ring-4 focus:ring-teal-50 outline-none font-bold text-2xl text-teal-600 tabular-nums transition-all" />
+                          <input required type="number" step="0.01" value={debtAmount} onChange={(e) => setDebtAmount(e.target.value)} placeholder="0.00" className="w-full mt-1 p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-teal-400 focus:ring-4 focus:ring-teal-50 outline-none font-bold text-2xl text-teal-600 tabular-nums transition-all" />
                         </div>
                       </>
                     )}
